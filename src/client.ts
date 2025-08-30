@@ -23,6 +23,25 @@ import {
 /**
  * Main Aria2 JSON-RPC client class
  * Provides a comprehensive interface to aria2 download manager
+ * 
+ * @example Basic usage
+ * ```typescript
+ * import { Aria2 } from "@hitarashi/aria2";
+ * 
+ * const aria2 = new Aria2();
+ * const gid = await aria2.addUri(["https://example.com/file.zip"]);
+ * const status = await aria2.tellStatus(gid);
+ * console.log(`Progress: ${status.completedLength}/${status.totalLength}`);
+ * ```
+ * 
+ * @example With configuration
+ * ```typescript
+ * const aria2 = new Aria2({
+ *   baseUrl: "http://localhost:6800/jsonrpc",
+ *   secret: "your-secret-token",
+ *   timeout: 30000
+ * });
+ * ```
  */
 export class Aria2 {
   private readonly transport: JsonRpcTransport;
@@ -36,6 +55,21 @@ export class Aria2 {
    * @param config - Optional configuration for the client
    * @throws {ConfigurationError} When configuration is invalid
    * @throws {ValidationError} When configuration validation fails
+   * 
+   * @example Default configuration
+   * ```typescript
+   * const aria2 = new Aria2(); // Uses localhost:6800/jsonrpc
+   * ```
+   * 
+   * @example Custom configuration
+   * ```typescript
+   * const aria2 = new Aria2({
+   *   baseUrl: "http://192.168.1.100:6800/jsonrpc",
+   *   secret: "mySecretToken",
+   *   timeout: 60000,
+   *   headers: { "User-Agent": "MyApp/1.0" }
+   * });
+   * ```
    */
   constructor(config?: Aria2Config) {
     // Validate and normalize configuration with defaults
@@ -60,6 +94,25 @@ export class Aria2 {
    * @throws {ValidationError} When URIs are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
+   * 
+   * @example Basic download
+   * ```typescript
+   * const gid = await aria2.addUri(["https://example.com/file.zip"]);
+   * console.log(`Download started with GID: ${gid}`);
+   * ```
+   * 
+   * @example Download with options
+   * ```typescript
+   * const gid = await aria2.addUri([
+   *   "https://example.com/file.zip",
+   *   "https://mirror.example.com/file.zip" // Fallback URL
+   * ], {
+   *   dir: "/downloads",
+   *   out: "myfile.zip",
+   *   "max-connection-per-server": 4,
+   *   "split": 8
+   * });
+   * ```
    */
   async addUri(uris: string[], options?: DownloadOptions): Promise<string> {
     try {
@@ -78,6 +131,23 @@ export class Aria2 {
    * @throws {ValidationError} When torrent data or URIs are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
+   * 
+   * @example From file
+   * ```typescript
+   * const torrentData = await Deno.readFile("./file.torrent");
+   * const gid = await aria2.addTorrent(torrentData, [], {
+   *   dir: "/downloads/torrents",
+   *   "bt-max-peers": 100
+   * });
+   * ```
+   * 
+   * @example With web seeds
+   * ```typescript
+   * const gid = await aria2.addTorrent(torrentData, [
+   *   "https://webseed1.example.com/file",
+   *   "https://webseed2.example.com/file"
+   * ]);
+   * ```
    */
   async addTorrent(
     torrent: string | Uint8Array,
@@ -191,6 +261,23 @@ export class Aria2 {
    * @throws {ValidationError} When GID or keys are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
+   * 
+   * @example Get full status
+   * ```typescript
+   * const status = await aria2.tellStatus(gid);
+   * console.log({
+   *   status: status.status,
+   *   progress: `${status.completedLength}/${status.totalLength}`,
+   *   speed: status.downloadSpeed
+   * });
+   * ```
+   * 
+   * @example Get specific fields only
+   * ```typescript
+   * const status = await aria2.tellStatus(gid, [
+   *   "status", "completedLength", "totalLength", "downloadSpeed"
+   * ]);
+   * ```
    */
   async tellStatus(gid: string, keys?: string[]): Promise<DownloadStatus> {
     try {

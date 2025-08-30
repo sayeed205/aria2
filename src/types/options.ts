@@ -1,5 +1,28 @@
 /**
  * Download options that can be passed to aria2 methods
+ * 
+ * @example Basic options
+ * ```typescript
+ * const options: DownloadOptions = {
+ *   dir: "/downloads",
+ *   out: "myfile.zip",
+ *   "max-connection-per-server": 4
+ * };
+ * ```
+ * 
+ * @example Advanced options
+ * ```typescript
+ * const options: DownloadOptions = {
+ *   dir: "/downloads",
+ *   split: 16,
+ *   "max-connection-per-server": 8,
+ *   "min-split-size": "1M",
+ *   "max-download-limit": "1M",
+ *   "user-agent": "MyDownloader/1.0",
+ *   "check-integrity": true,
+ *   "continue": true
+ * };
+ * ```
  */
 export interface DownloadOptions extends Record<string, unknown> {
   /** Directory to store downloaded files */

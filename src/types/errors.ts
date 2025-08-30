@@ -1,5 +1,16 @@
 /**
  * Base class for all aria2-related errors
+ * 
+ * @example Error handling
+ * ```typescript
+ * try {
+ *   await aria2.addUri(["https://example.com/file.zip"]);
+ * } catch (error) {
+ *   if (error instanceof Aria2Error) {
+ *     console.log(`aria2 error (${error.code}): ${error.message}`);
+ *   }
+ * }
+ * ```
  */
 export abstract class Aria2Error extends Error {
   /** Error code identifier */
@@ -27,6 +38,27 @@ export class AuthenticationError extends Aria2Error {
 
 /**
  * JSON-RPC protocol errors from aria2
+ * 
+ * @example Handling specific aria2 errors
+ * ```typescript
+ * try {
+ *   await aria2.pause(gid);
+ * } catch (error) {
+ *   if (error instanceof JsonRpcError) {
+ *     switch (error.rpcCode) {
+ *       case 1:
+ *         console.log("Authentication failed");
+ *         break;
+ *       case 4:
+ *         console.log("Download not found");
+ *         break;
+ *       case 5:
+ *         console.log("Cannot pause download in current state");
+ *         break;
+ *     }
+ *   }
+ * }
+ * ```
  */
 export class JsonRpcError extends Aria2Error {
   readonly code = "JSONRPC_ERROR";
