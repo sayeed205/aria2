@@ -1,7 +1,13 @@
 /**
  * Download status values from aria2
  */
-export type DownloadStatusValue = 'active' | 'waiting' | 'paused' | 'error' | 'complete' | 'removed';
+export type DownloadStatusValue =
+  | "active"
+  | "waiting"
+  | "paused"
+  | "error"
+  | "complete"
+  | "removed";
 
 /**
  * URI information for a file
@@ -10,7 +16,7 @@ export interface UriInfo {
   /** URI string */
   uri: string;
   /** Status of this URI */
-  status: 'used' | 'waiting';
+  status: "used" | "waiting";
 }
 
 /**

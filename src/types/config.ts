@@ -1,4 +1,4 @@
-import { ConfigurationError } from './errors.ts';
+import { ConfigurationError } from "./errors.ts";
 
 /**
  * Configuration options for the Aria2 client
@@ -6,13 +6,13 @@ import { ConfigurationError } from './errors.ts';
 export interface Aria2Config {
   /** Base URL for the aria2 JSON-RPC endpoint. Defaults to 'http://localhost:6800/jsonrpc' */
   baseUrl?: string;
-  
+
   /** Secret token for authentication with aria2 */
   secret?: string;
-  
+
   /** Request timeout in milliseconds. Defaults to 10000 (10 seconds) */
   timeout?: number;
-  
+
   /** Additional HTTP headers to include with requests */
   headers?: Record<string, string>;
 }
@@ -31,10 +31,10 @@ export interface RequiredAria2Config {
  * Default configuration values
  */
 export const DEFAULT_CONFIG: RequiredAria2Config = {
-  baseUrl: 'http://localhost:6800/jsonrpc',
+  baseUrl: "http://localhost:6800/jsonrpc",
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 };
 
@@ -62,22 +62,24 @@ export function validateConfig(config: Aria2Config = {}): RequiredAria2Config {
   // Validate timeout
   if (config.timeout !== undefined) {
     if (!Number.isInteger(config.timeout) || config.timeout <= 0) {
-      throw new ConfigurationError(`Timeout must be a positive integer, got: ${config.timeout}`);
+      throw new ConfigurationError(
+        `Timeout must be a positive integer, got: ${config.timeout}`,
+      );
     }
   }
 
   // Validate headers
   if (config.headers !== undefined) {
-    if (typeof config.headers !== 'object' || config.headers === null) {
-      throw new ConfigurationError('Headers must be an object');
+    if (typeof config.headers !== "object" || config.headers === null) {
+      throw new ConfigurationError("Headers must be an object");
     }
-    
+
     for (const [key, value] of Object.entries(config.headers)) {
-      if (typeof key !== 'string' || typeof value !== 'string') {
-        throw new ConfigurationError('Header keys and values must be strings');
+      if (typeof key !== "string" || typeof value !== "string") {
+        throw new ConfigurationError("Header keys and values must be strings");
       }
     }
-    
+
     // Merge with default headers
     result.headers = { ...DEFAULT_CONFIG.headers, ...config.headers };
   }

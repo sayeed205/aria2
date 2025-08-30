@@ -1,20 +1,20 @@
-import { RequiredAria2Config } from './types/config.ts';
-import { 
-  JsonRpcRequest, 
-  JsonRpcResponse, 
-  JsonRpcErrorResponse,
-  RequestId,
+import { RequiredAria2Config } from "./types/config.ts";
+import {
   Aria2MethodName,
-  Aria2MethodSignatures,
   Aria2MethodParams,
-  Aria2MethodResult
-} from './types/jsonrpc.ts';
-import { 
+  Aria2MethodResult,
+  Aria2MethodSignatures,
+  JsonRpcErrorResponse,
+  JsonRpcRequest,
+  JsonRpcResponse,
+  RequestId,
+} from "./types/jsonrpc.ts";
+import {
   Aria2Error,
-  NetworkError, 
-  JsonRpcError, 
-  AuthenticationError 
-} from './types/errors.ts';
+  AuthenticationError,
+  JsonRpcError,
+  NetworkError,
+} from "./types/errors.ts";
 
 /**
  * JSON-RPC transport layer for aria2 communication
@@ -33,22 +33,26 @@ export class JsonRpcTransport {
    */
   async call<T extends Aria2MethodName>(
     method: T,
-    params: Aria2MethodParams<Aria2MethodSignatures[T]>
+    params: Aria2MethodParams<Aria2MethodSignatures[T]>,
   ): Promise<Aria2MethodResult<Aria2MethodSignatures[T]>> {
     const request = this.buildRequest(method, params);
-    
+
     try {
       const response = await this.sendRequest(request);
-      return this.handleResponse<Aria2MethodResult<Aria2MethodSignatures[T]>>(response);
+      return this.handleResponse<Aria2MethodResult<Aria2MethodSignatures[T]>>(
+        response,
+      );
     } catch (error) {
       if (error instanceof Aria2Error) {
         throw error;
       }
-      
+
       // Wrap unknown errors as network errors
       throw new NetworkError(
-        `Failed to communicate with aria2: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
+        `Failed to communicate with aria2: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
       );
     }
   }
@@ -60,7 +64,7 @@ export class JsonRpcTransport {
    * @returns JSON-RPC request object
    */
   private buildRequest(method: string, params: unknown[]): JsonRpcRequest {
-    const requestParams = this.config.secret 
+    const requestParams = this.config.secret
       ? [`token:${this.config.secret}`, ...params]
       : params;
 
@@ -83,7 +87,7 @@ export class JsonRpcTransport {
 
     try {
       const response = await fetch(this.config.baseUrl, {
-        method: 'POST',
+        method: "POST",
         headers: this.config.headers,
         body: JSON.stringify(request),
         signal: controller.signal,
@@ -94,41 +98,43 @@ export class JsonRpcTransport {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           throw new AuthenticationError(
-            `Authentication failed: ${response.status} ${response.statusText}`
+            `Authentication failed: ${response.status} ${response.statusText}`,
           );
         }
-        
+
         throw new NetworkError(
-          `HTTP error: ${response.status} ${response.statusText}`
+          `HTTP error: ${response.status} ${response.statusText}`,
         );
       }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType?.includes('application/json')) {
+      const contentType = response.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
         throw new NetworkError(
-          `Invalid response content type: ${contentType}. Expected application/json`
+          `Invalid response content type: ${contentType}. Expected application/json`,
         );
       }
 
       const jsonResponse = await response.json();
-      
+
       // Validate JSON-RPC response structure
       if (!this.isValidJsonRpcResponse(jsonResponse)) {
-        throw new NetworkError('Invalid JSON-RPC response format');
+        throw new NetworkError("Invalid JSON-RPC response format");
       }
 
       return jsonResponse;
     } catch (error) {
       clearTimeout(timeoutId);
-      
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new NetworkError(`Request timeout after ${this.config.timeout}ms`);
+
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new NetworkError(
+          `Request timeout after ${this.config.timeout}ms`,
+        );
       }
-      
-      if (error instanceof TypeError && error.message.includes('fetch')) {
+
+      if (error instanceof TypeError && error.message.includes("fetch")) {
         throw new NetworkError(`Network connection failed: ${error.message}`);
       }
-      
+
       throw error;
     }
   }
@@ -144,7 +150,7 @@ export class JsonRpcTransport {
     }
 
     if (response.result === undefined) {
-      throw new JsonRpcError('Response missing result field', -1);
+      throw new JsonRpcError("Response missing result field", -1);
     }
 
     return response.result as T;
@@ -160,25 +166,25 @@ export class JsonRpcTransport {
     switch (error.code) {
       case 1:
         return new AuthenticationError(
-          `Authentication failed: ${error.message}`
+          `Authentication failed: ${error.message}`,
         );
       case 2:
         return new JsonRpcError(
           `Invalid method: ${error.message}`,
           error.code,
-          error.data
+          error.data,
         );
       case 3:
         return new JsonRpcError(
           `Invalid parameters: ${error.message}`,
           error.code,
-          error.data
+          error.data,
         );
       default:
         return new JsonRpcError(
           error.message,
           error.code,
-          error.data
+          error.data,
         );
     }
   }
@@ -189,15 +195,15 @@ export class JsonRpcTransport {
    * @returns True if valid JSON-RPC response
    */
   private isValidJsonRpcResponse(obj: unknown): obj is JsonRpcResponse {
-    if (typeof obj !== 'object' || obj === null) {
+    if (typeof obj !== "object" || obj === null) {
       return false;
     }
 
     const response = obj as Record<string, unknown>;
-    
+
     return (
       response.jsonrpc === "2.0" &&
-      (typeof response.id === 'string' || typeof response.id === 'number') &&
+      (typeof response.id === "string" || typeof response.id === "number") &&
       (response.result !== undefined || response.error !== undefined)
     );
   }
