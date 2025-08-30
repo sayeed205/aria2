@@ -1,10 +1,11 @@
 import { expect } from "@std/expect";
 import { beforeEach, describe, it } from "@std/testing/bdd";
 
+import type { JsonRpcTransport } from "../../src/transport.ts";
+import type { VersionInfo } from "../../src/types/global.ts";
+
 import { SystemMethods } from "../../src/methods/system.ts";
-import { JsonRpcTransport } from "../../src/transport.ts";
 import { ValidationError } from "../../src/types/errors.ts";
-import { VersionInfo } from "../../src/types/global.ts";
 
 // Mock transport for testing
 class MockTransport {

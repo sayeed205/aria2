@@ -1,11 +1,12 @@
 import { expect } from "@std/expect";
 import { beforeEach, describe, it } from "@std/testing/bdd";
 
+import type { JsonRpcTransport } from "../../src/transport.ts";
+import type { GlobalOptions } from "../../src/types/options.ts";
+import type { GlobalStat } from "../../src/types/global.ts";
+
 import { GlobalMethods } from "../../src/methods/global.ts";
-import { JsonRpcTransport } from "../../src/transport.ts";
 import { ValidationError } from "../../src/types/errors.ts";
-import { GlobalOptions } from "../../src/types/options.ts";
-import { GlobalStat } from "../../src/types/global.ts";
 
 // Mock transport for testing
 class MockTransport {

@@ -1,8 +1,9 @@
 import { assertEquals, assertInstanceOf, assertRejects } from "@std/assert";
 import { afterEach, beforeEach, describe, it } from "@std/testing/bdd";
 
-import { JsonRpcTransport } from "../../src/transport.ts";
 import type { RequiredAria2Config } from "../../src/types/config.ts";
+
+import { JsonRpcTransport } from "../../src/transport.ts";
 import {
   AuthenticationError,
   JsonRpcError,
