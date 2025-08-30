@@ -1,8 +1,5 @@
-export function add(a: number, b: number): number {
-  return a + b;
-}
+// Export core types and interfaces
+export * from './types/index.ts';
 
-// Learn more at https://docs.deno.com/runtime/manual/examples/module_metadata#concepts
-if (import.meta.main) {
-  console.log("Add 2 + 3 =", add(2, 3));
-}
+// Main Aria2 client class will be implemented in subsequent tasks
+// export { Aria2 } from './client.ts';
