@@ -100,14 +100,17 @@ export interface Aria2MethodSignatures {
   "aria2.forceRemove": Aria2Method<[string], string>;
 
   // Status query methods
-  "aria2.tellStatus": Aria2Method<[string, string[]?], Record<string, unknown>>;
-  "aria2.tellActive": Aria2Method<[string[]?], Record<string, unknown>[]>;
+  "aria2.tellStatus": Aria2Method<
+    [string] | [string, string[]],
+    Record<string, unknown>
+  >;
+  "aria2.tellActive": Aria2Method<[] | [string[]], Record<string, unknown>[]>;
   "aria2.tellWaiting": Aria2Method<
-    [number, number, string[]?],
+    [number, number] | [number, number, string[]],
     Record<string, unknown>[]
   >;
   "aria2.tellStopped": Aria2Method<
-    [number, number, string[]?],
+    [number, number] | [number, number, string[]],
     Record<string, unknown>[]
   >;
 
