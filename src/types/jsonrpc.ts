@@ -122,6 +122,10 @@ export interface Aria2MethodSignatures {
   // System methods
   "aria2.getVersion": Aria2Method<[], Record<string, string>>;
   "aria2.shutdown": Aria2Method<[], string>;
+  "aria2.forceShutdown": Aria2Method<[], string>;
+  "aria2.saveSession": Aria2Method<[], string>;
+  "aria2.purgeDownloadResult": Aria2Method<[], string>;
+  "aria2.removeDownloadResult": Aria2Method<[string], string>;
 }
 
 /**
