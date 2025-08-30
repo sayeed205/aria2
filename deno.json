@@ -1,6 +1,7 @@
 {
   "name": "@hitarashi/aria2",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": {
     ".": "./src/main.ts",
     "./types": "./src/types/index.ts"
