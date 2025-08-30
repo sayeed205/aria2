@@ -1,3 +1,5 @@
+import { ConfigurationError } from './errors.ts';
+
 /**
  * Configuration options for the Aria2 client
  */
@@ -35,3 +37,50 @@ export const DEFAULT_CONFIG: RequiredAria2Config = {
     'Content-Type': 'application/json',
   },
 };
+
+/**
+ * Validates and normalizes aria2 configuration
+ * @param config - User-provided configuration
+ * @returns Validated configuration with defaults applied
+ * @throws {ConfigurationError} When configuration is invalid
+ */
+export function validateConfig(config: Aria2Config = {}): RequiredAria2Config {
+  const result: RequiredAria2Config = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  };
+
+  // Validate baseUrl
+  if (config.baseUrl !== undefined) {
+    try {
+      new URL(config.baseUrl);
+    } catch {
+      throw new ConfigurationError(`Invalid baseUrl: ${config.baseUrl}`);
+    }
+  }
+
+  // Validate timeout
+  if (config.timeout !== undefined) {
+    if (!Number.isInteger(config.timeout) || config.timeout <= 0) {
+      throw new ConfigurationError(`Timeout must be a positive integer, got: ${config.timeout}`);
+    }
+  }
+
+  // Validate headers
+  if (config.headers !== undefined) {
+    if (typeof config.headers !== 'object' || config.headers === null) {
+      throw new ConfigurationError('Headers must be an object');
+    }
+    
+    for (const [key, value] of Object.entries(config.headers)) {
+      if (typeof key !== 'string' || typeof value !== 'string') {
+        throw new ConfigurationError('Header keys and values must be strings');
+      }
+    }
+    
+    // Merge with default headers
+    result.headers = { ...DEFAULT_CONFIG.headers, ...config.headers };
+  }
+
+  return result;
+}
