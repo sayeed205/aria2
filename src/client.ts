@@ -11,7 +11,14 @@ import type { GlobalOptions } from "./types/options.ts";
 import type { GlobalStat, VersionInfo } from "./types/global.ts";
 
 import { validateConfig } from "./types/config.ts";
-import { Aria2Error, NetworkError, AuthenticationError, JsonRpcError, ValidationError, ConfigurationError } from "./types/errors.ts";
+import {
+  Aria2Error,
+  AuthenticationError,
+  ConfigurationError,
+  JsonRpcError,
+  NetworkError,
+  ValidationError,
+} from "./types/errors.ts";
 
 /**
  * Main Aria2 JSON-RPC client class
@@ -33,10 +40,10 @@ export class Aria2 {
   constructor(config?: Aria2Config) {
     // Validate and normalize configuration with defaults
     const validatedConfig = validateConfig(config);
-    
+
     // Initialize transport layer
     this.transport = new JsonRpcTransport(validatedConfig);
-    
+
     // Initialize method handlers
     this.downloadMethods = new DownloadMethods(this.transport);
     this.statusMethods = new StatusMethods(this.transport);
@@ -58,7 +65,7 @@ export class Aria2 {
     try {
       return await this.downloadMethods.addUri(uris, options);
     } catch (error) {
-      throw this.enhanceError(error, 'addUri', { uris, options });
+      throw this.enhanceError(error, "addUri", { uris, options });
     }
   }
 
@@ -80,7 +87,11 @@ export class Aria2 {
     try {
       return await this.downloadMethods.addTorrent(torrent, uris, options);
     } catch (error) {
-      throw this.enhanceError(error, 'addTorrent', { torrent: '[torrent data]', uris, options });
+      throw this.enhanceError(error, "addTorrent", {
+        torrent: "[torrent data]",
+        uris,
+        options,
+      });
     }
   }
 
@@ -100,7 +111,10 @@ export class Aria2 {
     try {
       return await this.downloadMethods.addMetalink(metalink, options);
     } catch (error) {
-      throw this.enhanceError(error, 'addMetalink', { metalink: '[metalink data]', options });
+      throw this.enhanceError(error, "addMetalink", {
+        metalink: "[metalink data]",
+        options,
+      });
     }
   }
 
@@ -116,7 +130,7 @@ export class Aria2 {
     try {
       return await this.downloadMethods.pause(gid);
     } catch (error) {
-      throw this.enhanceError(error, 'pause', { gid });
+      throw this.enhanceError(error, "pause", { gid });
     }
   }
 
@@ -132,7 +146,7 @@ export class Aria2 {
     try {
       return await this.downloadMethods.unpause(gid);
     } catch (error) {
-      throw this.enhanceError(error, 'unpause', { gid });
+      throw this.enhanceError(error, "unpause", { gid });
     }
   }
 
@@ -148,7 +162,7 @@ export class Aria2 {
     try {
       return await this.downloadMethods.remove(gid);
     } catch (error) {
-      throw this.enhanceError(error, 'remove', { gid });
+      throw this.enhanceError(error, "remove", { gid });
     }
   }
 
@@ -164,7 +178,7 @@ export class Aria2 {
     try {
       return await this.downloadMethods.forceRemove(gid);
     } catch (error) {
-      throw this.enhanceError(error, 'forceRemove', { gid });
+      throw this.enhanceError(error, "forceRemove", { gid });
     }
   }
 
@@ -182,7 +196,7 @@ export class Aria2 {
     try {
       return await this.statusMethods.tellStatus(gid, keys);
     } catch (error) {
-      throw this.enhanceError(error, 'tellStatus', { gid, keys });
+      throw this.enhanceError(error, "tellStatus", { gid, keys });
     }
   }
 
@@ -198,7 +212,7 @@ export class Aria2 {
     try {
       return await this.statusMethods.tellActive(keys);
     } catch (error) {
-      throw this.enhanceError(error, 'tellActive', { keys });
+      throw this.enhanceError(error, "tellActive", { keys });
     }
   }
 
@@ -220,7 +234,7 @@ export class Aria2 {
     try {
       return await this.statusMethods.tellWaiting(offset, num, keys);
     } catch (error) {
-      throw this.enhanceError(error, 'tellWaiting', { offset, num, keys });
+      throw this.enhanceError(error, "tellWaiting", { offset, num, keys });
     }
   }
 
@@ -242,7 +256,7 @@ export class Aria2 {
     try {
       return await this.statusMethods.tellStopped(offset, num, keys);
     } catch (error) {
-      throw this.enhanceError(error, 'tellStopped', { offset, num, keys });
+      throw this.enhanceError(error, "tellStopped", { offset, num, keys });
     }
   }
 
@@ -257,7 +271,7 @@ export class Aria2 {
     try {
       return await this.globalMethods.getGlobalOption();
     } catch (error) {
-      throw this.enhanceError(error, 'getGlobalOption');
+      throw this.enhanceError(error, "getGlobalOption");
     }
   }
 
@@ -273,7 +287,7 @@ export class Aria2 {
     try {
       return await this.globalMethods.changeGlobalOption(options);
     } catch (error) {
-      throw this.enhanceError(error, 'changeGlobalOption', { options });
+      throw this.enhanceError(error, "changeGlobalOption", { options });
     }
   }
 
@@ -287,7 +301,7 @@ export class Aria2 {
     try {
       return await this.globalMethods.getGlobalStat();
     } catch (error) {
-      throw this.enhanceError(error, 'getGlobalStat');
+      throw this.enhanceError(error, "getGlobalStat");
     }
   }
 
@@ -302,7 +316,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.getVersion();
     } catch (error) {
-      throw this.enhanceError(error, 'getVersion');
+      throw this.enhanceError(error, "getVersion");
     }
   }
 
@@ -316,7 +330,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.shutdown();
     } catch (error) {
-      throw this.enhanceError(error, 'shutdown');
+      throw this.enhanceError(error, "shutdown");
     }
   }
 
@@ -331,7 +345,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.forceShutdown();
     } catch (error) {
-      throw this.enhanceError(error, 'forceShutdown');
+      throw this.enhanceError(error, "forceShutdown");
     }
   }
 
@@ -346,7 +360,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.saveSession();
     } catch (error) {
-      throw this.enhanceError(error, 'saveSession');
+      throw this.enhanceError(error, "saveSession");
     }
   }
 
@@ -361,7 +375,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.purgeDownloadResult();
     } catch (error) {
-      throw this.enhanceError(error, 'purgeDownloadResult');
+      throw this.enhanceError(error, "purgeDownloadResult");
     }
   }
 
@@ -378,7 +392,7 @@ export class Aria2 {
     try {
       return await this.systemMethods.removeDownloadResult(gid);
     } catch (error) {
-      throw this.enhanceError(error, 'removeDownloadResult', { gid });
+      throw this.enhanceError(error, "removeDownloadResult", { gid });
     }
   }
 
@@ -389,52 +403,58 @@ export class Aria2 {
    * @param params - Method parameters for context
    * @returns Enhanced error with better messaging
    */
-  private enhanceError(error: unknown, method: string, params?: Record<string, unknown>): Aria2Error {
+  private enhanceError(
+    error: unknown,
+    method: string,
+    params?: Record<string, unknown>,
+  ): Aria2Error {
     // If it's already an Aria2Error, enhance it with context
     if (error instanceof Aria2Error) {
       // Add method context to the error message if not already present
       if (!error.message.includes(method)) {
         const contextMessage = `Error in ${method}(): ${error.message}`;
-        
+
         // Create a new error of the same type with enhanced message
-        if (error.code === 'NETWORK_ERROR') {
+        if (error.code === "NETWORK_ERROR") {
           return new NetworkError(
             this.createUserFriendlyMessage(error, method, params),
-            { cause: error }
+            { cause: error },
           );
-        } else if (error.code === 'AUTH_ERROR') {
+        } else if (error.code === "AUTH_ERROR") {
           return new AuthenticationError(
-            'Authentication failed. Please check your secret token configuration.',
-            { cause: error }
+            "Authentication failed. Please check your secret token configuration.",
+            { cause: error },
           );
-        } else if (error.code === 'JSONRPC_ERROR') {
+        } else if (error.code === "JSONRPC_ERROR") {
           const jsonRpcError = error as JsonRpcError;
           return new JsonRpcError(
             this.createJsonRpcUserFriendlyMessage(jsonRpcError, method),
             jsonRpcError.rpcCode,
             jsonRpcError.rpcData,
-            { cause: error }
+            { cause: error },
           );
-        } else if (error.code === 'VALIDATION_ERROR') {
+        } else if (error.code === "VALIDATION_ERROR") {
           return new ValidationError(
             `Invalid parameters for ${method}(): ${error.message}`,
-            { cause: error }
+            { cause: error },
           );
-        } else if (error.code === 'CONFIG_ERROR') {
+        } else if (error.code === "CONFIG_ERROR") {
           return new ConfigurationError(
             `Configuration error: ${error.message}`,
-            { cause: error }
+            { cause: error },
           );
         }
       }
-      
+
       return error;
     }
 
     // For unknown errors, wrap them as NetworkError
     return new NetworkError(
-      `Unexpected error in ${method}(): ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error }
+      `Unexpected error in ${method}(): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error },
     );
   }
 
@@ -445,15 +465,24 @@ export class Aria2 {
    * @param params - Method parameters
    * @returns User-friendly error message
    */
-  private createUserFriendlyMessage(error: Aria2Error, method: string, params?: Record<string, unknown>): string {
-    if (error.code === 'NETWORK_ERROR') {
-      if (error.message.includes('timeout')) {
+  private createUserFriendlyMessage(
+    error: Aria2Error,
+    method: string,
+    params?: Record<string, unknown>,
+  ): string {
+    if (error.code === "NETWORK_ERROR") {
+      if (error.message.includes("timeout")) {
         return `Connection to aria2 timed out while calling ${method}(). Please check if aria2 is running and accessible.`;
-      } else if (error.message.includes('connection failed') || error.message.includes('fetch')) {
+      } else if (
+        error.message.includes("connection failed") ||
+        error.message.includes("fetch")
+      ) {
         return `Cannot connect to aria2 server while calling ${method}(). Please verify the server is running and the baseUrl is correct.`;
-      } else if (error.message.includes('401') || error.message.includes('403')) {
+      } else if (
+        error.message.includes("401") || error.message.includes("403")
+      ) {
         return `Authentication failed while calling ${method}(). Please check your secret token.`;
-      } else if (error.message.includes('404')) {
+      } else if (error.message.includes("404")) {
         return `aria2 JSON-RPC endpoint not found while calling ${method}(). Please verify the baseUrl path.`;
       }
     }
@@ -467,7 +496,10 @@ export class Aria2 {
    * @param method - Method name
    * @returns User-friendly error message
    */
-  private createJsonRpcUserFriendlyMessage(error: JsonRpcError, method: string): string {
+  private createJsonRpcUserFriendlyMessage(
+    error: JsonRpcError,
+    method: string,
+  ): string {
     switch (error.rpcCode) {
       case 1:
         return `Authentication failed for ${method}(). Please verify your secret token is correct.`;

@@ -1,4 +1,7 @@
-import { assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertThrows,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { Aria2 } from "../../src/client.ts";
 import { ConfigurationError, ValidationError } from "../../src/types/errors.ts";
 
@@ -22,7 +25,7 @@ Deno.test("Aria2 Client", async (t) => {
       assertThrows(
         () => new Aria2({ baseUrl: "invalid-url" }),
         ConfigurationError,
-        "Invalid baseUrl"
+        "Invalid baseUrl",
       );
     });
 
@@ -30,7 +33,7 @@ Deno.test("Aria2 Client", async (t) => {
       assertThrows(
         () => new Aria2({ timeout: -1 }),
         ConfigurationError,
-        "Timeout must be a positive integer"
+        "Timeout must be a positive integer",
       );
     });
   });

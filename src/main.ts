@@ -2,4 +2,4 @@
 export * from "./types/index.ts";
 
 // Main Aria2 client class
-export { Aria2 } from './client.ts';
+export { Aria2 } from "./client.ts";
