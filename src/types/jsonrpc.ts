@@ -1,6 +1,6 @@
-import type { DownloadStatus } from "./download";
-import type { GlobalStat, VersionInfo } from "./global";
-import type { GlobalOptions } from "./options";
+import type {DownloadStatus} from "./download.ts";
+import type {GlobalStat, VersionInfo} from "./global.ts";
+import type {GlobalOptions} from "./options.ts";
 
 /**
  * JSON-RPC 2.0 request structure
