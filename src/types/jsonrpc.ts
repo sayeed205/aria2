@@ -1,3 +1,7 @@
+import type { DownloadStatus } from "./download";
+import type { GlobalStat, VersionInfo } from "./global";
+import type { GlobalOptions } from "./options";
+
 /**
  * JSON-RPC 2.0 request structure
  */
@@ -69,14 +73,14 @@ export interface Aria2Method<
 /**
  * Type-safe aria2 method parameter validation
  */
-export type Aria2MethodParams<T> = T extends Aria2Method<infer P, unknown> ? P
-  : never;
+export type Aria2MethodParams<T> =
+  T extends Aria2Method<infer P, unknown> ? P : never;
 
 /**
  * Type-safe aria2 method result extraction
  */
-export type Aria2MethodResult<T> = T extends Aria2Method<unknown[], infer R> ? R
-  : never;
+export type Aria2MethodResult<T> =
+  T extends Aria2Method<unknown[], infer R> ? R : never;
 
 /**
  * Common aria2 method parameter types
@@ -102,25 +106,36 @@ export interface Aria2MethodSignatures {
   // Status query methods
   "aria2.tellStatus": Aria2Method<
     [string] | [string, string[]],
-    Record<string, unknown>
+    DownloadStatus
   >;
-  "aria2.tellActive": Aria2Method<[] | [string[]], Record<string, unknown>[]>;
+  "aria2.tellActive": Aria2Method<[] | [string[]], DownloadStatus[]>;
   "aria2.tellWaiting": Aria2Method<
     [number, number] | [number, number, string[]],
-    Record<string, unknown>[]
+    DownloadStatus[]
   >;
   "aria2.tellStopped": Aria2Method<
     [number, number] | [number, number, string[]],
-    Record<string, unknown>[]
+    DownloadStatus[]
   >;
 
   // Global methods
-  "aria2.getGlobalOption": Aria2Method<[], Record<string, string>>;
-  "aria2.changeGlobalOption": Aria2Method<[Record<string, string>], string>;
-  "aria2.getGlobalStat": Aria2Method<[], Record<string, string>>;
+  "aria2.getGlobalOption": Aria2Method<[], GlobalOptions>;
+  "aria2.changeGlobalOption": Aria2Method<[Partial<GlobalOptions>], string>;
+  "aria2.getGlobalStat": Aria2Method<[], GlobalStat>;
+
+  // System multicall (for type-safety with transport)
+  "system.multicall": Aria2Method<
+    [
+      {
+        methodName: Omit<Aria2MethodName, "system.multicall">;
+        params?: unknown[];
+      }[],
+    ],
+    unknown[]
+  >;
 
   // System methods
-  "aria2.getVersion": Aria2Method<[], Record<string, string>>;
+  "aria2.getVersion": Aria2Method<[], VersionInfo>;
   "aria2.shutdown": Aria2Method<[], string>;
   "aria2.forceShutdown": Aria2Method<[], string>;
   "aria2.saveSession": Aria2Method<[], string>;
@@ -132,6 +147,48 @@ export interface Aria2MethodSignatures {
  * Extract method names from aria2 method signatures
  */
 export type Aria2MethodName = keyof Aria2MethodSignatures;
+
+// Omit system.multicall from being allowed as a subcall to multicall itself
+export type MulticallAllowedMethodName = Exclude<
+  Aria2MethodName,
+  "system.multicall"
+>;
+
+/**
+ * Type describing a single multicall method argument (for system.multicall)
+ */
+export type MulticallSingle<T extends MulticallAllowedMethodName> = {
+  method: T;
+  // Params are optional: omitted means no arguments ([])
+  params?:
+    | Readonly<Aria2MethodParams<Aria2MethodSignatures[T]>>
+    | Aria2MethodParams<Aria2MethodSignatures[T]>;
+};
+
+/**
+ // NOTE: system.multicall should never be present in a multicall batch input.
+ // Result for each multicall element: [result] array or fault object.
+ */
+// Always return plain single-call return type for multicall elements (spread-friendly)
+export type MulticallElementResult<T extends MulticallAllowedMethodName> =
+  Aria2MethodResult<Aria2MethodSignatures[T]>;
+
+/**
+ * Computes the result type tuple for a given multicall input tuple.
+ */
+export type MulticallResults<
+  T extends readonly MulticallSingle<MulticallAllowedMethodName>[],
+> = {
+  [K in keyof T]: T[K] extends MulticallSingle<infer M>
+    ? MulticallElementResult<M>
+    : never;
+};
+
+/**
+ * The tuple/batch input type for multicall: excludes system.multicall
+ */
+export type MulticallInputs =
+  readonly MulticallSingle<MulticallAllowedMethodName>[];
 
 /**
  * Type-safe method call helper

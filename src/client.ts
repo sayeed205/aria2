@@ -23,17 +23,17 @@ import {
 /**
  * Main Aria2 JSON-RPC client class
  * Provides a comprehensive interface to aria2 download manager
- * 
+ *
  * @example Basic usage
  * ```typescript
  * import { Aria2 } from "@hitarashi/aria2";
- * 
+ *
  * const aria2 = new Aria2();
  * const gid = await aria2.addUri(["https://example.com/file.zip"]);
  * const status = await aria2.tellStatus(gid);
  * console.log(`Progress: ${status.completedLength}/${status.totalLength}`);
  * ```
- * 
+ *
  * @example With configuration
  * ```typescript
  * const aria2 = new Aria2({
@@ -55,12 +55,12 @@ export class Aria2 {
    * @param config - Optional configuration for the client
    * @throws {ConfigurationError} When configuration is invalid
    * @throws {ValidationError} When configuration validation fails
-   * 
+   *
    * @example Default configuration
    * ```typescript
    * const aria2 = new Aria2(); // Uses localhost:6800/jsonrpc
    * ```
-   * 
+   *
    * @example Custom configuration
    * ```typescript
    * const aria2 = new Aria2({
@@ -94,13 +94,13 @@ export class Aria2 {
    * @throws {ValidationError} When URIs are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
-   * 
+   *
    * @example Basic download
    * ```typescript
    * const gid = await aria2.addUri(["https://example.com/file.zip"]);
    * console.log(`Download started with GID: ${gid}`);
    * ```
-   * 
+   *
    * @example Download with options
    * ```typescript
    * const gid = await aria2.addUri([
@@ -131,7 +131,7 @@ export class Aria2 {
    * @throws {ValidationError} When torrent data or URIs are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
-   * 
+   *
    * @example From file
    * ```typescript
    * const torrentData = await Deno.readFile("./file.torrent");
@@ -140,7 +140,7 @@ export class Aria2 {
    *   "bt-max-peers": 100
    * });
    * ```
-   * 
+   *
    * @example With web seeds
    * ```typescript
    * const gid = await aria2.addTorrent(torrentData, [
@@ -261,7 +261,7 @@ export class Aria2 {
    * @throws {ValidationError} When GID or keys are invalid
    * @throws {NetworkError} When network communication fails
    * @throws {JsonRpcError} When aria2 returns an error
-   * 
+   *
    * @example Get full status
    * ```typescript
    * const status = await aria2.tellStatus(gid);
@@ -271,7 +271,7 @@ export class Aria2 {
    *   speed: status.downloadSpeed
    * });
    * ```
-   * 
+   *
    * @example Get specific fields only
    * ```typescript
    * const status = await aria2.tellStatus(gid, [
@@ -484,6 +484,25 @@ export class Aria2 {
   }
 
   /**
+   * Type-safe multicall: perform several RPC methods in one atomic request.
+   * The return type is a tuple/array matching the input order.
+   *
+   * @example
+   * const results = await aria2.multicall([
+   *   { method: "aria2.addUri", params: [["http://example.com"]] },
+   *   { method: "aria2.getVersion", params: [] },
+   * ]);
+   * // results: [ [gid-string], [versionInfo] ]
+   */
+  async multicall<
+    const T extends readonly import("./types/jsonrpc.ts").MulticallSingle<
+      import("./types/jsonrpc.ts").MulticallAllowedMethodName
+    >[],
+  >(methods: T): Promise<import("./types/jsonrpc.ts").MulticallResults<T>> {
+    return this.systemMethods.multicall(methods);
+  }
+
+  /**
    * Enhances errors with additional context and user-friendly messages
    * @param error - Original error
    * @param method - Method name where error occurred
@@ -566,7 +585,8 @@ export class Aria2 {
       ) {
         return `Cannot connect to aria2 server while calling ${method}(). Please verify the server is running and the baseUrl is correct.`;
       } else if (
-        error.message.includes("401") || error.message.includes("403")
+        error.message.includes("401") ||
+        error.message.includes("403")
       ) {
         return `Authentication failed while calling ${method}(). Please check your secret token.`;
       } else if (error.message.includes("404")) {

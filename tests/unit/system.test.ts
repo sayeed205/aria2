@@ -116,6 +116,101 @@ describe("SystemMethods", () => {
       expect(mockTransport.lastMethod).toBe("aria2.purgeDownloadResult");
       expect(mockTransport.lastParams).toEqual([]);
     });
+
+    describe("multicall", () => {
+      it("should call system.multicall with a tuple of method+params and return correct tuple type", async () => {
+        const mockGid = "cafebabedeadbeef";
+        const mockVersion = {
+          version: "1.36.0",
+          enabledFeatures: ["BitTorrent"],
+        };
+        // The multicall return, as per aria2 spec, is array of [result], [result]
+        mockTransport.mockResult = [[mockGid], [mockVersion]];
+
+        // Call multicall with one entry "with params" and one "with params omitted"
+        const result = await systemMethods.multicall([
+          {
+            method: "aria2.addUri" as "aria2.addUri",
+            params: [["http://foo"]], // explicit params
+          },
+          {
+            method: "aria2.getVersion" as "aria2.getVersion",
+            // params intentionally omitted
+          },
+        ]);
+        expect(mockTransport.lastMethod).toBe("system.multicall");
+        // Both params should be present, addUri with uris, getVersion auto-fills params as []
+        expect(mockTransport.lastParams).toHaveLength(1);
+        expect(mockTransport.lastParams[0] as any[]).toEqual([
+          { methodName: "aria2.addUri", params: [["http://foo"]] },
+          { methodName: "aria2.getVersion", params: [] },
+        ]);
+        expect(result).toEqual([[mockGid], [mockVersion]] as [
+          [string],
+          [{ version: string; enabledFeatures: string[] }],
+        ]);
+        // Type-level: result[0] must be a [string], result[1] a [object]
+        const gidTest: string = result[0][0];
+        const verTest: string = result[1][0].version;
+      });
+
+      it("should accept params omitted for methods that take none, and fill []", async () => {
+        mockTransport.mockResult = [["OK"]];
+        const result = await systemMethods.multicall([
+          {
+            method: "aria2.purgeDownloadResult" as "aria2.purgeDownloadResult",
+          },
+        ]);
+        expect((mockTransport.lastParams[0] as any[])[0].params).toEqual([]);
+        expect(result).toEqual([["OK"]]);
+      });
+
+      it("should filter/omit any call whose method is system.multicall", async () => {
+        mockTransport.mockResult = [["OK"]];
+        const result = await systemMethods.multicall([
+          { method: "aria2.getGlobalStat" as "aria2.getGlobalStat" },
+          { method: "system.multicall" as "system.multicall", params: [{}] },
+          {
+            method: "aria2.purgeDownloadResult" as "aria2.purgeDownloadResult",
+          },
+        ]);
+        // The batch should NOT contain system.multicall (omitted)
+        expect(
+          (mockTransport.lastParams[0] as any[]).some(
+            (x: { methodName: string }) => x.methodName === "system.multicall",
+          ),
+        ).toBe(false);
+        expect(
+          (mockTransport.lastParams[0] as any[]).map(
+            (x: { methodName: string }) => x.methodName,
+          ),
+        ).toContain("aria2.getGlobalStat");
+        expect(
+          (mockTransport.lastParams[0] as any[]).map(
+            (x: { methodName: string }) => x.methodName,
+          ),
+        ).toContain("aria2.purgeDownloadResult");
+        expect(result).toEqual([["OK"]]);
+      });
+
+      it("correctly returns error objects in place of results", async () => {
+        // Simulate: one call is a fault, the other succeeded
+        const fault = { faultCode: 42, faultString: "Nope" };
+        mockTransport.mockResult = [fault, ["okres"]];
+        const result = await systemMethods.multicall([
+          { method: "aria2.remove", params: ["badgid"] },
+          { method: "aria2.shutdown", params: [] },
+        ]);
+        expect(result[0]).toEqual(fault);
+        expect(result[1]).toEqual(["okres"]);
+      });
+
+      it("handles empty multicalls", async () => {
+        mockTransport.mockResult = [];
+        const result = await systemMethods.multicall([]);
+        expect(result).toEqual([]);
+      });
+    });
   });
 
   describe("removeDownloadResult", () => {
@@ -131,10 +226,12 @@ describe("SystemMethods", () => {
     });
 
     it("should throw ValidationError for invalid GID format", async () => {
-      await expect(systemMethods.removeDownloadResult("invalid-gid")).rejects
-        .toThrow(ValidationError);
-      await expect(systemMethods.removeDownloadResult("invalid-gid")).rejects
-        .toThrow("Invalid GID format");
+      await expect(
+        systemMethods.removeDownloadResult("invalid-gid"),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        systemMethods.removeDownloadResult("invalid-gid"),
+      ).rejects.toThrow("Invalid GID format");
     });
 
     it("should throw ValidationError for empty GID", async () => {
@@ -170,20 +267,24 @@ describe("SystemMethods", () => {
     });
 
     it("should reject GIDs that are too short", async () => {
-      await expect(systemMethods.removeDownloadResult("123456789abcdef"))
-        .rejects.toThrow(ValidationError);
+      await expect(
+        systemMethods.removeDownloadResult("123456789abcdef"),
+      ).rejects.toThrow(ValidationError);
     });
 
     it("should reject GIDs that are too long", async () => {
-      await expect(systemMethods.removeDownloadResult("1234567890abcdef0"))
-        .rejects.toThrow(ValidationError);
+      await expect(
+        systemMethods.removeDownloadResult("1234567890abcdef0"),
+      ).rejects.toThrow(ValidationError);
     });
 
     it("should reject GIDs with invalid characters", async () => {
-      await expect(systemMethods.removeDownloadResult("123456789abcdefg"))
-        .rejects.toThrow(ValidationError);
-      await expect(systemMethods.removeDownloadResult("123456789abcde-f"))
-        .rejects.toThrow(ValidationError);
+      await expect(
+        systemMethods.removeDownloadResult("123456789abcdefg"),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        systemMethods.removeDownloadResult("123456789abcde-f"),
+      ).rejects.toThrow(ValidationError);
     });
   });
 
@@ -213,8 +314,9 @@ describe("SystemMethods", () => {
         throw error;
       };
 
-      await expect(systemMethods.removeDownloadResult("1234567890abcdef"))
-        .rejects.toThrow("Network error");
+      await expect(
+        systemMethods.removeDownloadResult("1234567890abcdef"),
+      ).rejects.toThrow("Network error");
     });
   });
 
