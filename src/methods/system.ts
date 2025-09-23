@@ -1,10 +1,6 @@
 import type { JsonRpcTransport } from "../transport.ts";
 import type { VersionInfo } from "../types/global.ts";
-import type {
-  Aria2MethodName,
-  MulticallSingle,
-  MulticallResults,
-} from "../types/jsonrpc.ts";
+import type { MulticallResults } from "../types/jsonrpc.ts";
 
 import { ValidationError } from "../types/errors.ts";
 
@@ -78,24 +74,6 @@ export class SystemMethods {
   }
 
   /**
-   * Validates download GID
-   * @param gid - GID to validate
-   * @throws ValidationError if GID is invalid
-   */
-  private validateGid(gid: string): void {
-    if (typeof gid !== "string" || gid.trim().length === 0) {
-      throw new ValidationError("GID must be a non-empty string");
-    }
-
-    // aria2 GIDs are 16-character hexadecimal strings
-    if (!/^[0-9a-fA-F]{16}$/.test(gid)) {
-      throw new ValidationError(
-        `Invalid GID format: ${gid}. Expected 16-character hexadecimal string`,
-      );
-    }
-  }
-
-  /**
    * Type-safe multicall: perform several RPC methods in one atomic request.
    * @param methods Array/tuple of objects: { method, params }
    * @returns Promise resolving to tuple/array of result arrays/errors
@@ -128,9 +106,29 @@ export class SystemMethods {
         return entry[0];
       }
       throw new Error(
-        `aria2 multicall failed for method ${methods[idx]?.method}: ${(entry as any)?.faultCode ?? "?"} ${(entry as any)?.faultString ?? ""}`,
+        `aria2 multicall failed for method ${methods[idx]?.method}: ${
+          (entry as any)?.code ?? "?"
+        } ${(entry as any)?.message ?? ""}`,
       );
     });
     return resultUnwrapped as MulticallResults<T>;
+  }
+
+  /**
+   * Validates download GID
+   * @param gid - GID to validate
+   * @throws ValidationError if GID is invalid
+   */
+  private validateGid(gid: string): void {
+    if (typeof gid !== "string" || gid.trim().length === 0) {
+      throw new ValidationError("GID must be a non-empty string");
+    }
+
+    // aria2 GIDs are 16-character hexadecimal strings
+    if (!/^[0-9a-fA-F]{16}$/.test(gid)) {
+      throw new ValidationError(
+        `Invalid GID format: ${gid}. Expected 16-character hexadecimal string`,
+      );
+    }
   }
 }

@@ -1,6 +1,6 @@
 /**
  * Download options that can be passed to aria2 methods
- * 
+ *
  * @example Basic options
  * ```typescript
  * const options: DownloadOptions = {
@@ -9,7 +9,7 @@
  *   "max-connection-per-server": 4
  * };
  * ```
- * 
+ *
  * @example Advanced options
  * ```typescript
  * const options: DownloadOptions = {

@@ -19,14 +19,14 @@ import {
 /**
  * JSON-RPC transport layer for aria2 communication
  * Handles HTTP requests, response parsing, and error handling
- * 
+ *
  * This class is used internally by the Aria2 client and provides:
  * - Type-safe JSON-RPC method calls
  * - Automatic request/response serialization
  * - Comprehensive error handling and mapping
  * - Authentication token management
  * - Request timeout handling
- * 
+ *
  * @internal This class is not intended for direct use by consumers
  */
 export class JsonRpcTransport {

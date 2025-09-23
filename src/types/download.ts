@@ -58,14 +58,14 @@ export interface BitTorrentInfo {
 
 /**
  * Complete download status information from aria2
- * 
+ *
  * @example Checking download progress
  * ```typescript
  * const status = await aria2.tellStatus(gid);
  * const progress = (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
  * console.log(`${status.status}: ${progress.toFixed(1)}% at ${status.downloadSpeed} B/s`);
  * ```
- * 
+ *
  * @example Handling different statuses
  * ```typescript
  * switch (status.status) {

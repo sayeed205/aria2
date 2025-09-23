@@ -1,6 +1,6 @@
-import type {DownloadStatus} from "./download.ts";
-import type {GlobalStat, VersionInfo} from "./global.ts";
-import type {GlobalOptions} from "./options.ts";
+import type { DownloadStatus } from "./download.ts";
+import type { GlobalStat, VersionInfo } from "./global.ts";
+import type { GlobalOptions } from "./options.ts";
 
 /**
  * JSON-RPC 2.0 request structure
@@ -73,14 +73,14 @@ export interface Aria2Method<
 /**
  * Type-safe aria2 method parameter validation
  */
-export type Aria2MethodParams<T> =
-  T extends Aria2Method<infer P, unknown> ? P : never;
+export type Aria2MethodParams<T> = T extends Aria2Method<infer P, unknown> ? P
+  : never;
 
 /**
  * Type-safe aria2 method result extraction
  */
-export type Aria2MethodResult<T> =
-  T extends Aria2Method<unknown[], infer R> ? R : never;
+export type Aria2MethodResult<T> = T extends Aria2Method<unknown[], infer R> ? R
+  : never;
 
 /**
  * Common aria2 method parameter types
@@ -187,8 +187,9 @@ export type MulticallResults<
 /**
  * The tuple/batch input type for multicall: excludes system.multicall
  */
-export type MulticallInputs =
-  readonly MulticallSingle<MulticallAllowedMethodName>[];
+export type MulticallInputs = readonly MulticallSingle<
+  MulticallAllowedMethodName
+>[];
 
 /**
  * Type-safe method call helper

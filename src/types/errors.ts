@@ -1,6 +1,6 @@
 /**
  * Base class for all aria2-related errors
- * 
+ *
  * @example Error handling
  * ```typescript
  * try {
@@ -38,7 +38,7 @@ export class AuthenticationError extends Aria2Error {
 
 /**
  * JSON-RPC protocol errors from aria2
- * 
+ *
  * @example Handling specific aria2 errors
  * ```typescript
  * try {
