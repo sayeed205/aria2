@@ -38,6 +38,12 @@ type PendingRequest = {
  * @internal This class is not intended for direct use by consumers
  * @note HTTP/fetch is no longer supported; only ws:// or wss:// endpoints are allowed.
  */
+import type {
+  Aria2NotificationMethod,
+  Aria2NotificationType,
+  Aria2NotificationPayloads,
+} from "./types/notifications.ts";
+
 export class JsonRpcTransport {
   private requestIdCounter = 0;
   private ws: WebSocket | null = null;
@@ -45,7 +51,30 @@ export class JsonRpcTransport {
   private isClosed: boolean = false;
   private wsReadyPromise: Promise<void> | null = null;
 
+  // Notification handler set by Aria2 or user; notifies on each notification
+  private notificationHandler:
+    | (<T extends Aria2NotificationType>(
+        type: T,
+        event: Aria2NotificationPayloads[T],
+      ) => void)
+    | null = null;
+
   constructor(private readonly config: RequiredAria2Config) {}
+
+  /**
+   * Registers a callback for incoming notifications from aria2.
+   * Called with (eventType, eventPayload) for each notification.
+   */
+  setNotificationHandler(
+    handler:
+      | (<T extends Aria2NotificationType>(
+          type: T,
+          event: Aria2NotificationPayloads[T],
+        ) => void)
+      | null,
+  ) {
+    this.notificationHandler = handler;
+  }
 
   /**
    * Makes a type-safe JSON-RPC call to aria2
@@ -222,7 +251,7 @@ export class JsonRpcTransport {
 
   /**
    * Handles incoming WebSocket messages.
-   * Maps received messages to the correct pending request based on id.
+   * Maps received messages to pending requests, or dispatches notifications.
    */
   private handleWsMessage(data: any) {
     let obj: unknown;
@@ -232,6 +261,35 @@ export class JsonRpcTransport {
       // Ignore/Log parse errors
       return;
     }
+
+    // Check for notifications (no id, has a method of interest)
+    if (this.isNotificationMessage(obj)) {
+      const notification = obj as { method: string; params: any[] };
+      // Map method to type. Only handle valid notifications.
+      const methodToType: Record<string, Aria2NotificationType> = {
+        "aria2.onDownloadStart": "onDownloadStart",
+        "aria2.onDownloadPause": "onDownloadPause",
+        "aria2.onDownloadStop": "onDownloadStop",
+        "aria2.onDownloadComplete": "onDownloadComplete",
+        "aria2.onDownloadError": "onDownloadError",
+        "aria2.onBtDownloadComplete": "onBtDownloadComplete",
+      };
+      const type = methodToType[notification.method as Aria2NotificationMethod];
+      if (
+        type &&
+        Array.isArray(notification.params) &&
+        notification.params.length >= 1
+      ) {
+        const event = notification.params[0];
+        if (this.notificationHandler) {
+          // @ts-ignore type safety is preserved above due to our mapping
+          this.notificationHandler(type, event);
+        }
+      }
+      return;
+    }
+
+    // Normal response
     if (!this.isValidJsonRpcResponse(obj)) {
       // Ignore or log invalid ws message
       return;
@@ -248,6 +306,32 @@ export class JsonRpcTransport {
       }
     }
     // else: response for unknown/expired/late id (no-op)
+  }
+
+  /**
+   * Checks if object is an aria2 notification message (for our known notif methods).
+   */
+  private isNotificationMessage(
+    obj: unknown,
+  ): obj is { method: string; params: any[] } {
+    if (
+      typeof obj === "object" &&
+      obj !== null &&
+      "method" in obj &&
+      typeof (obj as any).method === "string" &&
+      !("id" in obj)
+    ) {
+      const method = (obj as any).method;
+      return [
+        "aria2.onDownloadStart",
+        "aria2.onDownloadPause",
+        "aria2.onDownloadStop",
+        "aria2.onDownloadComplete",
+        "aria2.onDownloadError",
+        "aria2.onBtDownloadComplete",
+      ].includes(method);
+    }
+    return false;
   }
 
   /**

@@ -9,6 +9,11 @@ import type { DownloadOptions } from "./types/options.ts";
 import type { DownloadStatus } from "./types/download.ts";
 import type { GlobalOptions } from "./types/options.ts";
 import type { GlobalStat, VersionInfo } from "./types/global.ts";
+import type {
+  Aria2NotificationType,
+  Aria2NotificationPayloads,
+  Aria2NotificationHandler,
+} from "./types/notifications.ts";
 
 import { validateConfig } from "./types/config.ts";
 import {
@@ -50,6 +55,22 @@ export class Aria2 {
   private readonly globalMethods: GlobalMethods;
   private readonly systemMethods: SystemMethods;
 
+  // --- Notification Listener State ---
+  /**
+   * Registry for notification event listeners:
+   * event type (string) => Set of callbacks
+   */
+  private readonly notificationListeners: {
+    [K in Aria2NotificationType]: Set<Aria2NotificationHandler<K>>;
+  } = {
+    onDownloadStart: new Set(),
+    onDownloadPause: new Set(),
+    onDownloadStop: new Set(),
+    onDownloadComplete: new Set(),
+    onDownloadError: new Set(),
+    onBtDownloadComplete: new Set(),
+  };
+
   /**
    * Creates a new Aria2 client instance
    * @param config - Optional configuration for the client
@@ -77,6 +98,14 @@ export class Aria2 {
 
     // Initialize transport layer
     this.transport = new JsonRpcTransport(validatedConfig);
+
+    // Notification hook: transport → Aria2.notifyListeners
+    this.transport.setNotificationHandler(
+      <T extends Aria2NotificationType>(
+        type: T,
+        event: Aria2NotificationPayloads[T],
+      ) => this.notifyListeners(type, event),
+    );
 
     // Initialize method handlers
     this.downloadMethods = new DownloadMethods(this.transport);
@@ -504,6 +533,49 @@ export class Aria2 {
 
   close() {
     this.transport.close();
+  }
+
+  /**
+   * Subscribe to a notification event. Only supported aria2 notification types accepted.
+   * Returns an unsubscribe function for removal (preferred pattern).
+   * Usage: aria2.on('onDownloadStart', (ev) => ...)
+   */
+  on<T extends Aria2NotificationType>(
+    event: T,
+    cb: Aria2NotificationHandler<T>,
+  ): () => void {
+    // Register
+    this.notificationListeners[event].add(cb as Aria2NotificationHandler<any>);
+    // Return function to remove
+    return () => this.off(event, cb);
+  }
+
+  /**
+   * Remove a previously registered notification handler.
+   * Usage: aria2.off('onDownloadStart', handler)
+   */
+  off<T extends Aria2NotificationType>(
+    event: T,
+    cb: Aria2NotificationHandler<T>,
+  ): void {
+    this.notificationListeners[event].delete(
+      cb as Aria2NotificationHandler<any>,
+    );
+  }
+
+  /** Internal: called by transport on notification; dispatches to listeners. */
+  private notifyListeners<T extends Aria2NotificationType>(
+    type: T,
+    event: Aria2NotificationPayloads[T],
+  ) {
+    for (const cb of this.notificationListeners[type]) {
+      try {
+        cb(event);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error(`Unhandled error in ${type} event listener:`, e);
+      }
+    }
   }
 
   /**

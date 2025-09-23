@@ -5,6 +5,10 @@ import {
 
 import { Aria2 } from "../../src/client.ts";
 import { ConfigurationError } from "../../src/types/errors.ts";
+import type {
+  Aria2NotificationType,
+  Aria2NotificationPayloads,
+} from "../../src/types/notifications.ts";
 
 Deno.test("Aria2 Client", async (t) => {
   await t.step("constructor", async (t) => {
@@ -72,6 +76,85 @@ Deno.test("Aria2 Client", async (t) => {
       assertEquals(typeof client.saveSession, "function");
       assertEquals(typeof client.purgeDownloadResult, "function");
       assertEquals(typeof client.removeDownloadResult, "function");
+    });
+
+    await t.step("notifications", async (t) => {
+      // Install a global MockWebSocket for notification testing (minimal)
+      const originalWebSocket = globalThis.WebSocket;
+      let sentMessages: string[] = [];
+      let _onopen: (() => void) | undefined;
+      let _onmessage: ((event: { data: string }) => void) | undefined;
+      class MockWebSocket {
+        static OPEN = 1;
+        readyState = MockWebSocket.OPEN;
+        sent: string[] = [];
+        url: string;
+        onopen: (() => void) | null = null;
+        onclose: ((ev: { code: number; reason: string }) => void) | null = null;
+        onerror: ((ev: any) => void) | null = null;
+        onmessage: ((ev: { data: string }) => void) | null = null;
+        constructor(url: string) {
+          this.url = url;
+          _onopen = this.onopen ? () => this.onopen!() : undefined;
+          _onmessage = this.onmessage ? (ev) => this.onmessage!(ev) : undefined;
+          setTimeout(() => {
+            if (this.onopen) this.onopen();
+          }, 2);
+        }
+        send(data: string) {
+          this.sent.push(data);
+          sentMessages.push(data);
+        }
+        close() {}
+        receiveNotification(method: string, params: any) {
+          if (this.onmessage) {
+            this.onmessage({
+              data: JSON.stringify({ method, params: [params] }),
+            });
+          }
+        }
+      }
+      (globalThis as any).WebSocket = MockWebSocket;
+
+      try {
+        const client = new Aria2({ baseUrl: "ws://example-mock" });
+
+        let calledType: Aria2NotificationType | undefined;
+        let calledPayload: any = undefined;
+        const unsubscribe = client.on("onDownloadStart", (payload) => {
+          calledType = "onDownloadStart";
+          calledPayload = payload;
+        });
+
+        // Simulate a notification from the server
+        // @ts-ignore
+        const ws: MockWebSocket =
+          client["transport"]["ws"] ||
+          (client["transport"]["ws"] = new MockWebSocket("ws://example-mock"));
+        ws.receiveNotification("aria2.onDownloadStart", { gid: "xyz789" });
+
+        await new Promise((r) => setTimeout(r, 5));
+        assertEquals(calledType, "onDownloadStart");
+        assertEquals(calledPayload && calledPayload.gid, "xyz789");
+
+        // Test unsubscribe (should not call again)
+        calledType = undefined;
+        unsubscribe();
+        ws.receiveNotification("aria2.onDownloadStart", { gid: "second" });
+        await new Promise((r) => setTimeout(r, 5));
+        assertEquals(calledType, undefined);
+
+        // Multiple listeners for different types
+        let pausePayload: any = undefined;
+        client.on("onDownloadPause", (payload) => {
+          pausePayload = payload;
+        });
+        ws.receiveNotification("aria2.onDownloadPause", { gid: "paused" });
+        await new Promise((r) => setTimeout(r, 5));
+        assertEquals(pausePayload && pausePayload.gid, "paused");
+      } finally {
+        (globalThis as any).WebSocket = originalWebSocket;
+      }
     });
   });
 });
