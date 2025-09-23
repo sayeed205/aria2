@@ -502,6 +502,10 @@ export class Aria2 {
     return this.systemMethods.multicall(methods);
   }
 
+  close() {
+    this.transport.close();
+  }
+
   /**
    * Enhances errors with additional context and user-friendly messages
    * @param error - Original error

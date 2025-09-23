@@ -1,5 +1,10 @@
 # Migration Guide
 
+> **⚡ NOTE:**
+> @hitarashi/aria2 **now exclusively uses WebSocket (`ws://` or `wss://`) for all JSON-RPC communication**.
+> You MUST use a ws:// or wss:// endpoint for `baseUrl` and ensure your aria2 server is accessible via WebSockets.
+> **HTTP/HTTPS/fetch/REST transport is no longer valid.**
+
 This guide helps you migrate to @hitarashi/aria2 from other aria2 clients or upgrade between versions.
 
 ## Table of Contents
@@ -30,17 +35,18 @@ aria2c --enable-rpc --rpc-listen-all --rpc-listen-port=6800 --rpc-secret=your-se
 
 ### CLI to API Mapping
 
-| CLI Command | API Method | Example |
-|-------------|------------|---------|
-| `aria2c "https://example.com/file.zip"` | `addUri()` | `await aria2.addUri(["https://example.com/file.zip"])` |
+| CLI Command                                              | API Method              | Example                                                                       |
+| -------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `aria2c "https://example.com/file.zip"`                  | `addUri()`              | `await aria2.addUri(["https://example.com/file.zip"])`                        |
 | `aria2c --dir=/downloads "https://example.com/file.zip"` | `addUri()` with options | `await aria2.addUri(["https://example.com/file.zip"], { dir: "/downloads" })` |
-| `aria2c "file.torrent"` | `addTorrent()` | `await aria2.addTorrent(torrentData)` |
-| `aria2c --pause` | `pause()` | `await aria2.pause(gid)` |
-| Check download status | `tellStatus()` | `await aria2.tellStatus(gid)` |
+| `aria2c "file.torrent"`                                  | `addTorrent()`          | `await aria2.addTorrent(torrentData)`                                         |
+| `aria2c --pause`                                         | `pause()`               | `await aria2.pause(gid)`                                                      |
+| Check download status                                    | `tellStatus()`          | `await aria2.tellStatus(gid)`                                                 |
 
 ### Example Migration
 
 **Before (CLI script):**
+
 ```bash
 #!/bin/bash
 aria2c --dir=/downloads \
@@ -50,18 +56,19 @@ aria2c --dir=/downloads \
 ```
 
 **After (Deno script):**
+
 ```typescript
 import { Aria2 } from "@hitarashi/aria2";
 
 const aria2 = new Aria2({
-  baseUrl: "http://localhost:6800/jsonrpc",
-  secret: "your-secret-token"
+  baseUrl: "ws://localhost:6800/jsonrpc",
+  secret: "your-secret-token",
 });
 
 const gid = await aria2.addUri(["https://example.com/file.zip"], {
   dir: "/downloads",
   "max-connection-per-server": 4,
-  split: 8
+  split: 8,
 });
 
 console.log(`Download started with GID: ${gid}`);
@@ -74,31 +81,33 @@ console.log(`Download started with GID: ${gid}`);
 If you're migrating from `node-aria2` or similar Node.js libraries:
 
 **Before (node-aria2):**
+
 ```javascript
-const Aria2 = require('aria2');
+const Aria2 = require("aria2");
 const aria2 = new Aria2({
-  host: 'localhost',
+  host: "localhost",
   port: 6800,
   secure: false,
-  secret: 'your-secret-token'
+  secret: "your-secret-token",
 });
 
-aria2.call('addUri', ['https://example.com/file.zip'], (err, res) => {
+aria2.call("addUri", ["https://example.com/file.zip"], (err, res) => {
   if (err) {
     console.error(err);
   } else {
-    console.log('GID:', res);
+    console.log("GID:", res);
   }
 });
 ```
 
 **After (@hitarashi/aria2):**
+
 ```typescript
 import { Aria2 } from "@hitarashi/aria2";
 
 const aria2 = new Aria2({
-  baseUrl: "http://localhost:6800/jsonrpc",
-  secret: "your-secret-token"
+  baseUrl: "ws://localhost:6800/jsonrpc",
+  secret: "your-secret-token",
 });
 
 try {
@@ -110,6 +119,7 @@ try {
 ```
 
 **Key differences:**
+
 - Uses modern async/await instead of callbacks
 - Full TypeScript support with type safety
 - Simplified configuration (single `baseUrl` instead of separate host/port)
@@ -119,24 +129,27 @@ try {
 ### From aria2.js
 
 **Before (aria2.js):**
+
 ```javascript
-import Aria2 from 'aria2.js';
+import Aria2 from "aria2.js";
 
 const aria2 = new Aria2({
-  WebSocket: 'ws://localhost:6800/jsonrpc'
+  baseUrl: "ws://localhost:6800/jsonrpc",
 });
 
-aria2.send('addUri', [['https://example.com/file.zip']])
-  .then(gid => console.log('GID:', gid))
-  .catch(err => console.error(err));
+aria2
+  .send("addUri", [["https://example.com/file.zip"]])
+  .then((gid) => console.log("GID:", gid))
+  .catch((err) => console.error(err));
 ```
 
 **After (@hitarashi/aria2):**
+
 ```typescript
 import { Aria2 } from "@hitarashi/aria2";
 
 const aria2 = new Aria2({
-  baseUrl: "http://localhost:6800/jsonrpc"
+  baseUrl: "ws://localhost:6800/jsonrpc",
 });
 
 try {
@@ -148,7 +161,8 @@ try {
 ```
 
 **Key differences:**
-- Uses HTTP instead of WebSocket (more reliable for most use cases)
+
+- Uses WebSocket transport (ws://, wss://) for ALL JSON-RPC. HTTP/HTTPS/fetch endpoints are not supported for JSON-RPC requests.
 - Method names match aria2 API directly (`addUri` instead of generic `send`)
 - Better error handling with typed exceptions
 - No need to wrap parameters in arrays
@@ -162,6 +176,7 @@ Currently, this is the initial version. Future migration guides will be added he
 ### Breaking Changes Policy
 
 This library follows semantic versioning:
+
 - **Patch versions** (0.0.x): Bug fixes, no breaking changes
 - **Minor versions** (0.x.0): New features, backward compatible
 - **Major versions** (x.0.0): Breaking changes
@@ -173,23 +188,23 @@ This library follows semantic versioning:
 **Issue:** Connection refused or timeout errors
 
 **Solution:** Verify aria2 is running with JSON-RPC enabled:
+
 ```bash
 # Check if aria2 is running
 ps aux | grep aria2
 
-# Test JSON-RPC endpoint
-curl -X POST http://localhost:6800/jsonrpc \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"aria2.getVersion","id":"1"}'
+# Make sure aria2 is listening for WebSockets
+# Note: Raw HTTP POST to Aria2 with curl will not work for @hitarashi/aria2. You must use ws:// or wss:// in configuration.
 ```
 
 **Issue:** Authentication errors
 
 **Solution:** Ensure secret token matches:
+
 ```typescript
 // Make sure this matches your aria2 --rpc-secret
 const aria2 = new Aria2({
-  secret: "your-secret-token"
+  secret: "your-secret-token",
 });
 ```
 
@@ -198,18 +213,24 @@ const aria2 = new Aria2({
 **Issue:** TypeScript compilation errors
 
 **Solution:** Ensure you're importing types correctly:
+
 ```typescript
-import { Aria2, type DownloadOptions, type DownloadStatus } from "@hitarashi/aria2";
+import {
+  Aria2,
+  type DownloadOptions,
+  type DownloadStatus,
+} from "@hitarashi/aria2";
 
 const options: DownloadOptions = {
   dir: "/downloads",
-  "max-connection-per-server": 4
+  "max-connection-per-server": 4,
 };
 ```
 
 **Issue:** Runtime type errors
 
 **Solution:** The library validates parameters at runtime:
+
 ```typescript
 try {
   await aria2.addUri(["invalid-url"]);
@@ -223,14 +244,15 @@ try {
 ### Error Handling Migration
 
 **Before (generic error handling):**
+
 ```javascript
-aria2.call('addUri', ['https://example.com/file.zip'])
-  .catch(err => {
-    console.error('Something went wrong:', err.message);
-  });
+aria2.call("addUri", ["https://example.com/file.zip"]).catch((err) => {
+  console.error("Something went wrong:", err.message);
+});
 ```
 
 **After (specific error handling):**
+
 ```typescript
 try {
   await aria2.addUri(["https://example.com/file.zip"]);
@@ -250,18 +272,20 @@ try {
 ### Async/Await Migration
 
 **Before (callbacks):**
+
 ```javascript
-aria2.call('addUri', ['https://example.com/file.zip'], (err, gid) => {
+aria2.call("addUri", ["https://example.com/file.zip"], (err, gid) => {
   if (err) return console.error(err);
-  
-  aria2.call('tellStatus', [gid], (err, status) => {
+
+  aria2.call("tellStatus", [gid], (err, status) => {
     if (err) return console.error(err);
-    console.log('Status:', status.status);
+    console.log("Status:", status.status);
   });
 });
 ```
 
 **After (async/await):**
+
 ```typescript
 try {
   const gid = await aria2.addUri(["https://example.com/file.zip"]);
@@ -275,22 +299,22 @@ try {
 ### Batch Operations Migration
 
 **Before (sequential):**
+
 ```javascript
-const urls = ['url1', 'url2', 'url3'];
+const urls = ["url1", "url2", "url3"];
 const gids = [];
 
 for (const url of urls) {
-  const gid = await aria2.call('addUri', [url]);
+  const gid = await aria2.call("addUri", [url]);
   gids.push(gid);
 }
 ```
 
 **After (parallel):**
+
 ```typescript
-const urls = ['url1', 'url2', 'url3'];
-const gids = await Promise.all(
-  urls.map(url => aria2.addUri([url]))
-);
+const urls = ["url1", "url2", "url3"];
+const gids = await Promise.all(urls.map((url) => aria2.addUri([url])));
 ```
 
 ## Best Practices for Migration
@@ -304,8 +328,8 @@ import { Aria2 } from "@hitarashi/aria2";
 
 async function testConnection() {
   const aria2 = new Aria2({
-    baseUrl: "http://localhost:6800/jsonrpc",
-    secret: "your-secret-token"
+    baseUrl: "ws://localhost:6800/jsonrpc",
+    secret: "your-secret-token",
   });
 
   try {
@@ -326,6 +350,7 @@ if (await testConnection()) {
 ### 2. Migrate Incrementally
 
 Don't migrate everything at once. Start with:
+
 1. Connection and configuration
 2. Basic download operations
 3. Status monitoring
@@ -335,6 +360,7 @@ Don't migrate everything at once. Start with:
 ### 3. Use TypeScript Features
 
 Take advantage of TypeScript features:
+
 ```typescript
 // Use interfaces for better type safety
 interface DownloadConfig {
@@ -346,7 +372,7 @@ interface DownloadConfig {
 async function downloadFile(config: DownloadConfig): Promise<string> {
   const options: DownloadOptions = {
     dir: config.directory,
-    ...(config.filename && { out: config.filename })
+    ...(config.filename && { out: config.filename }),
   };
 
   return await aria2.addUri([config.url], options);
@@ -356,11 +382,11 @@ async function downloadFile(config: DownloadConfig): Promise<string> {
 ### 4. Implement Proper Error Handling
 
 ```typescript
-import { 
-  Aria2Error, 
-  NetworkError, 
-  AuthenticationError, 
-  JsonRpcError 
+import {
+  Aria2Error,
+  NetworkError,
+  AuthenticationError,
+  JsonRpcError,
 } from "@hitarashi/aria2";
 
 async function robustDownload(url: string): Promise<string | null> {
@@ -387,21 +413,19 @@ async function robustDownload(url: string): Promise<string | null> {
 ### 5. Test Thoroughly
 
 Create comprehensive tests for your migration:
+
 ```typescript
 import { assertEquals, assertRejects } from "@std/assert";
 
 Deno.test("aria2 client basic functionality", async () => {
   const aria2 = new Aria2();
-  
+
   // Test connection
   const version = await aria2.getVersion();
   assertEquals(typeof version.version, "string");
-  
+
   // Test invalid GID handling
-  await assertRejects(
-    () => aria2.tellStatus("invalid-gid"),
-    ValidationError
-  );
+  await assertRejects(() => aria2.tellStatus("invalid-gid"), ValidationError);
 });
 ```
 
@@ -417,8 +441,9 @@ If you encounter issues during migration:
 
 ## Migration Checklist
 
-- [ ] aria2 is running with JSON-RPC enabled
+- [ ] aria2 is running with JSON-RPC enabled and accessible via WebSocket (ws:// or wss://)
 - [ ] Secret token is configured correctly
+- [ ] All usage of baseUrl uses ws:// or wss:// (no http/https!)
 - [ ] Basic connection test passes
 - [ ] Core download operations work
 - [ ] Error handling is implemented

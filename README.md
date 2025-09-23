@@ -8,14 +8,24 @@ A comprehensive, type-safe Deno/JSR package for interacting with aria2 download 
 ## Features
 
 - 🚀 **Full TypeScript Support** - Complete type safety with IntelliSense
-- 📦 **Zero Dependencies** - Uses Deno's native fetch API
+- 📦 **Zero Dependencies** - Uses native WebSocket transport (no fetch/HTTP)
 - 🎯 **Complete API Coverage** - All aria2 JSON-RPC methods supported
 - 🛡️ **Robust Error Handling** - Detailed error types and user-friendly messages
 - 🔧 **Flexible Configuration** - Easy setup with sensible defaults
+- ⚡ **WebSocket Transport Only** - All communication uses `ws://`/`wss://` and native `WebSocket` (no HTTP or fetch)
 - 📚 **Comprehensive Documentation** - JSDoc comments for all APIs
 - ✅ **Well Tested** - Extensive unit and integration tests
 
 ## Installation
+
+---
+
+> **❗ NOTE:**
+> This library now uses **WebSocket (`ws://`/`wss://`) only**.
+> HTTP/HTTPS endpoints, fetch, and REST are **NOT supported** for JSON-RPC communication.
+> Ensure your `aria2` instance is launched with JSON-RPC enabled and accessible via WebSocket.
+
+---
 
 ### Using JSR (Recommended)
 
@@ -50,7 +60,7 @@ const aria2 = new Aria2();
 
 // Or with custom configuration
 const aria2 = new Aria2({
-  baseUrl: "http://localhost:6800/jsonrpc",
+  baseUrl: "ws://localhost:6800/jsonrpc", // WebSocket endpoint for aria2 JSON-RPC
   secret: "your-secret-token",
   timeout: 10000,
 });
@@ -62,6 +72,10 @@ console.log(`Download started with GID: ${gid}`);
 // Check download status
 const status = await aria2.tellStatus(gid);
 console.log(`Progress: ${status.completedLength}/${status.totalLength}`);
+
+// ---
+// When done, close the WebSocket connection to free resources:
+aria2.close(); // After calling this, no further requests will work!
 ```
 
 ## Configuration
@@ -70,9 +84,9 @@ The `Aria2` constructor accepts an optional configuration object:
 
 ```typescript
 interface Aria2Config {
-  baseUrl?: string;        // Default: "http://localhost:6800/jsonrpc"
-  secret?: string;         // Default: undefined
-  timeout?: number;        // Default: 30000 (30 seconds)
+  baseUrl?: string; // Default: "ws://localhost:6800/jsonrpc"
+  secret?: string; // Default: undefined
+  timeout?: number; // Default: 30000 (30 seconds)
   headers?: Record<string, string>; // Default: {}
 }
 ```
@@ -82,18 +96,18 @@ interface Aria2Config {
 ```typescript
 // Basic configuration
 const aria2 = new Aria2({
-  baseUrl: "http://192.168.1.100:6800/jsonrpc",
-  secret: "mySecretToken"
+  baseUrl: "ws://192.168.1.100:6800/jsonrpc",
+  secret: "mySecretToken",
 });
 
 // With custom headers and timeout
 const aria2 = new Aria2({
-  baseUrl: "https://aria2.example.com/jsonrpc",
+  baseUrl: "wss://aria2.example.com/jsonrpc", // Note: Use wss:// for secure WebSocket if behind TLS
   secret: "mySecretToken",
   timeout: 60000, // 60 seconds
   headers: {
-    "User-Agent": "MyApp/1.0"
-  }
+    "User-Agent": "MyApp/1.0",
+  },
 });
 ```
 
@@ -105,25 +119,28 @@ const aria2 = new Aria2({
 
 ```typescript
 // Add download from HTTP/HTTPS/FTP URLs
-const gid = await aria2.addUri([
-  "https://example.com/file.zip",
-  "https://mirror.example.com/file.zip" // Multiple URLs for redundancy
-], {
-  dir: "/downloads",
-  out: "myfile.zip",
-  "max-connection-per-server": 4
-});
+const gid = await aria2.addUri(
+  [
+    "https://example.com/file.zip",
+    "https://mirror.example.com/file.zip", // Multiple URLs for redundancy
+  ],
+  {
+    dir: "/downloads",
+    out: "myfile.zip",
+    "max-connection-per-server": 4,
+  },
+);
 
 // Add torrent download
 const torrentData = await Deno.readFile("./file.torrent");
 const gid = await aria2.addTorrent(torrentData, [], {
-  dir: "/downloads/torrents"
+  dir: "/downloads/torrents",
 });
 
 // Add metalink download
 const metalinkData = await Deno.readFile("./file.metalink");
 const gids = await aria2.addMetalink(metalinkData, {
-  dir: "/downloads/metalink"
+  dir: "/downloads/metalink",
 });
 ```
 
@@ -153,11 +170,19 @@ console.log({
   status: status.status, // 'active', 'waiting', 'paused', 'error', 'complete', 'removed'
   progress: `${status.completedLength}/${status.totalLength}`,
   speed: status.downloadSpeed,
-  eta: calculateETA(status.totalLength, status.completedLength, status.downloadSpeed)
+  eta: calculateETA(
+    status.totalLength,
+    status.completedLength,
+    status.downloadSpeed,
+  ),
 });
 
 // Get only specific fields to reduce response size
-const basicStatus = await aria2.tellStatus(gid, ["status", "completedLength", "totalLength"]);
+const basicStatus = await aria2.tellStatus(gid, [
+  "status",
+  "completedLength",
+  "totalLength",
+]);
 
 // Get all active downloads
 const activeDownloads = await aria2.tellActive();
@@ -174,13 +199,15 @@ const stoppedDownloads = await aria2.tellStopped(0, 10);
 ```typescript
 // Get current global options
 const globalOptions = await aria2.getGlobalOption();
-console.log(`Max concurrent downloads: ${globalOptions["max-concurrent-downloads"]}`);
+console.log(
+  `Max concurrent downloads: ${globalOptions["max-concurrent-downloads"]}`,
+);
 
 // Change global options
 await aria2.changeGlobalOption({
   "max-concurrent-downloads": 5,
   "max-connection-per-server": 8,
-  "split": 16
+  split: 16,
 });
 
 // Get global statistics
@@ -190,7 +217,7 @@ console.log({
   uploadSpeed: stats.uploadSpeed,
   numActive: stats.numActive,
   numWaiting: stats.numWaiting,
-  numStopped: stats.numStopped
+  numStopped: stats.numStopped,
 });
 ```
 
@@ -216,6 +243,11 @@ await aria2.shutdown();
 
 // Force shutdown aria2 (immediate)
 await aria2.forceShutdown();
+
+// ----
+// New in WebSocket mode: Close the connection when finished to free resources:
+aria2.close(); // This will terminate the underlying WebSocket and reject any pending requests.
+// After close(), further calls on this client will fail.
 ```
 
 ## Error Handling
@@ -223,13 +255,13 @@ await aria2.forceShutdown();
 The library provides detailed error types for different failure scenarios:
 
 ```typescript
-import { 
-  Aria2Error, 
-  NetworkError, 
-  AuthenticationError, 
-  JsonRpcError, 
+import {
+  Aria2Error,
+  NetworkError,
+  AuthenticationError,
+  JsonRpcError,
   ValidationError,
-  ConfigurationError 
+  ConfigurationError,
 } from "@hitarashi/aria2";
 
 try {
@@ -288,22 +320,24 @@ async function monitorDownload(gid: string) {
   const interval = setInterval(async () => {
     try {
       const status = await aria2.tellStatus(gid);
-      
+
       if (status.status === "complete") {
         console.log(`✅ Download completed: ${status.files[0]?.path}`);
         clearInterval(interval);
         return;
       }
-      
+
       if (status.status === "error") {
         console.log(`❌ Download failed: ${status.errorMessage}`);
         clearInterval(interval);
         return;
       }
-      
-      const progress = (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
-      console.log(`📥 Progress: ${progress.toFixed(1)}% (${status.downloadSpeed} B/s)`);
-      
+
+      const progress =
+        (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
+      console.log(
+        `📥 Progress: ${progress.toFixed(1)}% (${status.downloadSpeed} B/s)`,
+      );
     } catch (error) {
       console.error("Error checking status:", error);
       clearInterval(interval);
@@ -323,23 +357,28 @@ monitorDownload(gid);
 const urls = [
   "https://example.com/file1.zip",
   "https://example.com/file2.zip",
-  "https://example.com/file3.zip"
+  "https://example.com/file3.zip",
 ];
 
 const gids = await Promise.all(
-  urls.map(url => aria2.addUri([url], { dir: "/downloads" }))
+  urls.map((url) => aria2.addUri([url], { dir: "/downloads" })),
 );
 
 console.log(`Started ${gids.length} downloads`);
 
 // Monitor all downloads
 const statuses = await Promise.all(
-  gids.map(gid => aria2.tellStatus(gid, ["status", "completedLength", "totalLength"]))
+  gids.map((gid) =>
+    aria2.tellStatus(gid, ["status", "completedLength", "totalLength"]),
+  ),
 );
 
 statuses.forEach((status, index) => {
-  const progress = (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
-  console.log(`Download ${index + 1}: ${progress.toFixed(1)}% (${status.status})`);
+  const progress =
+    (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
+  console.log(
+    `Download ${index + 1}: ${progress.toFixed(1)}% (${status.status})`,
+  );
 });
 ```
 
@@ -349,9 +388,9 @@ statuses.forEach((status, index) => {
 // High-speed download configuration
 await aria2.addUri(["https://example.com/file.zip"], {
   "max-connection-per-server": 16,
-  "split": 16,
+  split: 16,
   "min-split-size": "1M",
-  "continue": true,
+  continue: true,
   "max-concurrent-downloads": 1,
   "check-integrity": true,
   "allow-overwrite": false,
@@ -362,8 +401,8 @@ await aria2.addUri(["https://example.com/file.zip"], {
   "http-accept-gzip": true,
   "reuse-uri": true,
   "retry-wait": 10,
-  "timeout": 60,
-  "connect-timeout": 30
+  timeout: 60,
+  "connect-timeout": 30,
 });
 
 // BitTorrent-specific options
@@ -380,7 +419,7 @@ await aria2.addTorrent(torrentData, [], {
   "enable-peer-exchange": true,
   "follow-torrent": true,
   "listen-port": "6881-6999",
-  "max-upload-limit": "100K"
+  "max-upload-limit": "100K",
 });
 ```
 
@@ -398,18 +437,18 @@ import type {
   VersionInfo,
   FileInfo,
   BitTorrentInfo,
-  UriInfo
+  UriInfo,
 } from "@hitarashi/aria2";
 
 // Use types for better development experience
 const config: Aria2Config = {
-  baseUrl: "http://localhost:6800/jsonrpc",
-  secret: "token"
+  baseUrl: "ws://localhost:6800/jsonrpc",
+  secret: "token",
 };
 
 const options: DownloadOptions = {
   dir: "/downloads",
-  "max-connection-per-server": 4
+  "max-connection-per-server": 4,
 };
 ```
 
@@ -445,3 +484,11 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 
 - [aria2](https://aria2.github.io/) - The aria2 download utility
 - [aria2 JSON-RPC API](https://aria2.github.io/manual/en/html/aria2c.html#rpc-interface) - Official API documentation
+
+---
+
+> **ℹ️ WebSocket-Only Transport**
+> All communication with aria2 is handled over WebSockets (`ws://` or `wss://`).
+> You must **not** use HTTP/HTTPS URLs for the JSON-RPC endpoint.
+> This package does **not** use fetch or HTTP POST.
+> Example: `baseUrl: "ws://localhost:6800/jsonrpc"` (not `http://...`)

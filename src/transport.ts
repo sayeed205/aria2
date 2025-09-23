@@ -17,20 +17,33 @@ import {
 } from "./types/errors.ts";
 
 /**
- * JSON-RPC transport layer for aria2 communication
- * Handles HTTP requests, response parsing, and error handling
+ * Outstanding request type for map
+ */
+type PendingRequest = {
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * JSON-RPC transport layer for aria2 communication using native WebSocket only.
+ * Handles WebSocket connection, request/response mapping, and error handling.
  *
  * This class is used internally by the Aria2 client and provides:
- * - Type-safe JSON-RPC method calls
- * - Automatic request/response serialization
- * - Comprehensive error handling and mapping
+ * - Type-safe JSON-RPC method calls over a persistent WebSocket connection
+ * - Automatic request/response serialization, mapping, timeout management
+ * - Comprehensive error handling and mapping (matching previous fetch-based semantics)
  * - Authentication token management
- * - Request timeout handling
  *
  * @internal This class is not intended for direct use by consumers
+ * @note HTTP/fetch is no longer supported; only ws:// or wss:// endpoints are allowed.
  */
 export class JsonRpcTransport {
   private requestIdCounter = 0;
+  private ws: WebSocket | null = null;
+  private pending: Map<RequestId, PendingRequest> = new Map();
+  private isClosed: boolean = false;
+  private wsReadyPromise: Promise<void> | null = null;
 
   constructor(private readonly config: RequiredAria2Config) {}
 
@@ -55,8 +68,6 @@ export class JsonRpcTransport {
       if (error instanceof Aria2Error) {
         throw error;
       }
-
-      // Wrap unknown errors as network errors
       throw new NetworkError(
         `Failed to communicate with aria2: ${
           error instanceof Error ? error.message : String(error)
@@ -67,85 +78,14 @@ export class JsonRpcTransport {
   }
 
   /**
-   * Builds a JSON-RPC request object
-   * @param method - The method name
-   * @param params - Method parameters
-   * @returns JSON-RPC request object
+   * Closes the underlying WebSocket connection and rejects all pending requests.
+   * After calling close(), this transport instance cannot be used again.
+   * Safe to call multiple times.
    */
-  private buildRequest(method: string, params: unknown[]): JsonRpcRequest {
-    const requestParams = this.config.secret
-      ? [`token:${this.config.secret}`, ...params]
-      : params;
-
-    return {
-      jsonrpc: "2.0",
-      method,
-      params: requestParams,
-      id: this.generateRequestId(),
-    };
-  }
-
-  /**
-   * Sends HTTP request to aria2 server
-   * @param request - JSON-RPC request object
-   * @returns Promise resolving to JSON-RPC response
-   */
-  private async sendRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-    try {
-      const response = await fetch(this.config.baseUrl, {
-        method: "POST",
-        headers: this.config.headers,
-        body: JSON.stringify(request),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new AuthenticationError(
-            `Authentication failed: ${response.status} ${response.statusText}`,
-          );
-        }
-
-        throw new NetworkError(
-          `HTTP error: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType?.includes("application/json")) {
-        throw new NetworkError(
-          `Invalid response content type: ${contentType}. Expected application/json`,
-        );
-      }
-
-      const jsonResponse = await response.json();
-
-      // Validate JSON-RPC response structure
-      if (!this.isValidJsonRpcResponse(jsonResponse)) {
-        throw new NetworkError("Invalid JSON-RPC response format");
-      }
-
-      return jsonResponse;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new NetworkError(
-          `Request timeout after ${this.config.timeout}ms`,
-        );
-      }
-
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new NetworkError(`Network connection failed: ${error.message}`);
-      }
-
-      throw error;
-    }
+  public close(): void {
+    this.cleanupSocket(
+      new NetworkError("WebSocket connection closed by user via close()"),
+    );
   }
 
   /**
@@ -163,6 +103,168 @@ export class JsonRpcTransport {
     }
 
     return response.result as T;
+  }
+
+  /**
+   * Builds a JSON-RPC request object.
+   * Automatically includes token if configured.
+   */
+  private buildRequest(method: string, params: unknown[]): JsonRpcRequest {
+    const requestParams = this.config.secret
+      ? [`token:${this.config.secret}`, ...params]
+      : params;
+
+    return {
+      jsonrpc: "2.0",
+      method,
+      params: requestParams,
+      id: this.generateRequestId(),
+    };
+  }
+
+  /**
+   * Generates unique request ID
+   * @returns Request ID
+   */
+  private generateRequestId(): RequestId {
+    return ++this.requestIdCounter;
+  }
+
+  /**
+   * Sends a JSON-RPC request to aria2 server via native WebSocket.
+   * Handles mapping of requests and responses, including timeout/rejection.
+   */
+  private async sendRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+    if (this.isClosed) {
+      throw new NetworkError("WebSocket is closed.");
+    }
+    await this.ensureWebSocket();
+
+    return new Promise<JsonRpcResponse>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this.pending.delete(request.id);
+        reject(
+          new NetworkError(`Request timeout after ${this.config.timeout}ms`),
+        );
+      }, this.config.timeout);
+
+      this.pending.set(request.id, { resolve, reject, timeoutId });
+
+      try {
+        this.ws!.send(JSON.stringify(request));
+      } catch (err) {
+        clearTimeout(timeoutId);
+        this.pending.delete(request.id);
+        reject(
+          new NetworkError(`WebSocket send failed:
+            ${err instanceof Error ? err.message : String(err)}`),
+        );
+      }
+    });
+  }
+
+  /**
+   * Ensures there is an open WebSocket connection, opening if necessary.
+   * Only ws:// and wss:// endpoints are allowed/supported.
+   */
+  private async ensureWebSocket(): Promise<void> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+    if (this.wsReadyPromise) {
+      return this.wsReadyPromise;
+    }
+
+    this.wsReadyPromise = new Promise<void>((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(this.config.baseUrl);
+        this.isClosed = false;
+      } catch (err) {
+        this.isClosed = true;
+        this.ws = null;
+        this.wsReadyPromise = null;
+        reject(
+          new NetworkError(
+            `Failed to construct WebSocket: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
+        return;
+      }
+      this.ws.onopen = () => {
+        resolve();
+      };
+      this.ws.onerror = (event) => {
+        // clean up and reject all pending
+        this.cleanupSocket(new NetworkError("WebSocket error event"));
+        reject(new NetworkError("WebSocket error event"));
+      };
+      this.ws.onclose = (event) => {
+        this.isClosed = true;
+        this.ws = null;
+        this.cleanupSocket(
+          new NetworkError(
+            `WebSocket closed: code=${event.code}, reason=${event.reason}`,
+          ),
+        );
+      };
+      this.ws.onmessage = (event) => {
+        this.handleWsMessage(event.data);
+      };
+    });
+    try {
+      await this.wsReadyPromise;
+    } catch (err) {
+      this.wsReadyPromise = null;
+      throw err;
+    }
+    this.wsReadyPromise = null;
+  }
+
+  /**
+   * Handles incoming WebSocket messages.
+   * Maps received messages to the correct pending request based on id.
+   */
+  private handleWsMessage(data: any) {
+    let obj: unknown;
+    try {
+      obj = typeof data === "string" ? JSON.parse(data) : data;
+    } catch (e) {
+      // Ignore/Log parse errors
+      return;
+    }
+    if (!this.isValidJsonRpcResponse(obj)) {
+      // Ignore or log invalid ws message
+      return;
+    }
+    const response = obj as JsonRpcResponse;
+    const pending = this.pending.get(response.id);
+    if (pending) {
+      clearTimeout(pending.timeoutId);
+      this.pending.delete(response.id);
+      if (response.error) {
+        pending.reject(this.createJsonRpcError(response.error));
+      } else {
+        pending.resolve(response);
+      }
+    }
+    // else: response for unknown/expired/late id (no-op)
+  }
+
+  /**
+   * Validates JSON-RPC response structure
+   * @param obj - Object to validate
+   * @returns True if valid JSON-RPC response
+   */
+  private isValidJsonRpcResponse(obj: unknown): obj is JsonRpcResponse {
+    if (typeof obj !== "object" || obj === null) {
+      return false;
+    }
+    const response = obj as Record<string, unknown>;
+    return (
+      response.jsonrpc === "2.0" &&
+      (typeof response.id === "string" || typeof response.id === "number") &&
+      (response.result !== undefined || response.error !== undefined)
+    );
   }
 
   /**
@@ -190,38 +292,24 @@ export class JsonRpcTransport {
           error.data,
         );
       default:
-        return new JsonRpcError(
-          error.message,
-          error.code,
-          error.data,
-        );
+        return new JsonRpcError(error.message, error.code, error.data);
     }
   }
 
   /**
-   * Validates JSON-RPC response structure
-   * @param obj - Object to validate
-   * @returns True if valid JSON-RPC response
+   * On fatal error, close, or error event: reject all outstanding requests,
+   * clear state, and close the underlying WebSocket connection.
    */
-  private isValidJsonRpcResponse(obj: unknown): obj is JsonRpcResponse {
-    if (typeof obj !== "object" || obj === null) {
-      return false;
+  private cleanupSocket(reason: Error) {
+    for (const [, pending] of this.pending.entries()) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(reason);
     }
-
-    const response = obj as Record<string, unknown>;
-
-    return (
-      response.jsonrpc === "2.0" &&
-      (typeof response.id === "string" || typeof response.id === "number") &&
-      (response.result !== undefined || response.error !== undefined)
-    );
-  }
-
-  /**
-   * Generates unique request ID
-   * @returns Request ID
-   */
-  private generateRequestId(): RequestId {
-    return ++this.requestIdCounter;
+    this.pending.clear();
+    if (this.ws) {
+      this.ws.close();
+    }
+    this.isClosed = true;
+    this.ws = null;
   }
 }

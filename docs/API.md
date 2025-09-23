@@ -2,6 +2,10 @@
 
 This document provides a comprehensive reference for the @hitarashi/aria2 package.
 
+> **⚡ NOTE:**
+> All JSON-RPC transport now uses **WebSocket only** (`ws://` or `wss://`)—HTTP, HTTPS, fetch, or REST is NOT supported.
+> Your aria2 server must listen with WebSocket support.
+
 ## Table of Contents
 
 - [Aria2 Class](#aria2-class)
@@ -27,26 +31,49 @@ new Aria2(config?: Aria2Config)
 Creates a new Aria2 client instance.
 
 **Parameters:**
+
 - `config` (optional): Configuration options for the client
 
 **Throws:**
+
 - `ConfigurationError`: When configuration is invalid
 - `ValidationError`: When configuration validation fails
 
 **Example:**
+
 ```typescript
 import { Aria2 } from "@hitarashi/aria2";
 
 // Default configuration
 const aria2 = new Aria2();
 
-// Custom configuration
+// Custom configuration (WebSocket-only!)
 const aria2 = new Aria2({
-  baseUrl: "http://localhost:6800/jsonrpc",
+  baseUrl: "ws://localhost:6800/jsonrpc", // WebSocket endpoint
   secret: "your-secret-token",
-  timeout: 30000
+  timeout: 30000,
 });
 ```
+
+## Closing the WebSocket Connection
+
+To explicitly close the underlying WebSocket connection and reject all pending requests, call the `close()` method.
+After `close()` is called on an `Aria2` instance, you **must not** use that instance for further requests.
+
+```typescript
+import { Aria2 } from "@hitarashi/aria2";
+
+const aria2 = new Aria2({
+  baseUrl: "ws://localhost:6800/jsonrpc",
+  secret: "your-secret-token",
+});
+
+// ... do RPC calls as needed
+
+aria2.close(); // Closes the WebSocket and cleans up resources
+```
+
+> **Warning:** Any further request after `.close()` will immediately throw an error. Always create a new Aria2 instance if you need to restart the connection.
 
 ## Configuration
 
@@ -56,7 +83,7 @@ Configuration options for the Aria2 client.
 
 ```typescript
 interface Aria2Config {
-  baseUrl?: string;
+  baseUrl?: string; // Use ws:// or wss:// endpoints ONLY
   secret?: string;
   timeout?: number;
   headers?: Record<string, string>;
@@ -65,31 +92,31 @@ interface Aria2Config {
 
 **Properties:**
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `baseUrl` | `string` | `"http://localhost:6800/jsonrpc"` | Base URL for the aria2 JSON-RPC endpoint |
-| `secret` | `string` | `undefined` | Secret token for authentication |
-| `timeout` | `number` | `10000` | Request timeout in milliseconds |
-| `headers` | `Record<string, string>` | `{}` | Additional HTTP headers |
+| Property  | Type                     | Default                         | Description                                                                                                              |
+| --------- | ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl` | `string`                 | `"ws://localhost:6800/jsonrpc"` | **WebSocket URL for the aria2 JSON-RPC endpoint**. <br /> `ws://` or `wss://` only. <br /> **HTTP/HTTPS not supported!** |
+| `secret`  | `string`                 | `undefined`                     | Secret token for authentication                                                                                          |
+| `timeout` | `number`                 | `10000`                         | Request timeout in milliseconds                                                                                          |
+| `headers` | `Record<string, string>` | `{}`                            | Additional HTTP headers (sent in WebSocket handshake)                                                                    |
 
 **Examples:**
 
 ```typescript
-// Basic configuration
+// Basic configuration (WebSocket-only!)
 const config: Aria2Config = {
-  baseUrl: "http://192.168.1.100:6800/jsonrpc",
-  secret: "mySecretToken"
+  baseUrl: "ws://192.168.1.100:6800/jsonrpc",
+  secret: "mySecretToken",
 };
 
-// Advanced configuration
+// Advanced configuration (secure WebSocket)
 const config: Aria2Config = {
-  baseUrl: "https://aria2.example.com/jsonrpc",
+  baseUrl: "wss://aria2.example.com/jsonrpc", // Use wss:// for TLS
   secret: "mySecretToken",
   timeout: 60000,
   headers: {
     "User-Agent": "MyApp/1.0",
-    "X-Custom-Header": "value"
-  }
+    "X-Custom-Header": "value",
+  },
 };
 ```
 
@@ -106,30 +133,33 @@ addUri(uris: string[], options?: DownloadOptions): Promise<string>
 ```
 
 **Parameters:**
+
 - `uris`: Array of URIs to download from
 - `options` (optional): Download options
 
 **Returns:** Promise resolving to download GID
 
 **Throws:**
+
 - `ValidationError`: When URIs are invalid
 - `NetworkError`: When network communication fails
 - `JsonRpcError`: When aria2 returns an error
 
 **Example:**
+
 ```typescript
 // Basic download
 const gid = await aria2.addUri(["https://example.com/file.zip"]);
 
 // Download with options
-const gid = await aria2.addUri([
-  "https://example.com/file.zip",
-  "https://mirror.example.com/file.zip"
-], {
-  dir: "/downloads",
-  out: "myfile.zip",
-  "max-connection-per-server": 4
-});
+const gid = await aria2.addUri(
+  ["https://example.com/file.zip", "https://mirror.example.com/file.zip"],
+  {
+    dir: "/downloads",
+    out: "myfile.zip",
+    "max-connection-per-server": 4,
+  },
+);
 ```
 
 ### addTorrent()
@@ -141,6 +171,7 @@ addTorrent(torrent: string | Uint8Array, uris?: string[], options?: DownloadOpti
 ```
 
 **Parameters:**
+
 - `torrent`: Torrent file data as base64 string or Uint8Array
 - `uris` (optional): Array of web seed URIs
 - `options` (optional): Download options
@@ -148,11 +179,12 @@ addTorrent(torrent: string | Uint8Array, uris?: string[], options?: DownloadOpti
 **Returns:** Promise resolving to download GID
 
 **Example:**
+
 ```typescript
 const torrentData = await Deno.readFile("./file.torrent");
 const gid = await aria2.addTorrent(torrentData, [], {
   dir: "/downloads/torrents",
-  "bt-max-peers": 100
+  "bt-max-peers": 100,
 });
 ```
 
@@ -165,6 +197,7 @@ addMetalink(metalink: string | Uint8Array, options?: DownloadOptions): Promise<s
 ```
 
 **Parameters:**
+
 - `metalink`: Metalink file data as base64 string or Uint8Array
 - `options` (optional): Download options
 
@@ -179,6 +212,7 @@ pause(gid: string): Promise<string>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID to pause
 
 **Returns:** Promise resolving to the GID of paused download
@@ -192,6 +226,7 @@ unpause(gid: string): Promise<string>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID to unpause
 
 **Returns:** Promise resolving to the GID of unpaused download
@@ -205,6 +240,7 @@ remove(gid: string): Promise<string>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID to remove
 
 **Returns:** Promise resolving to the GID of removed download
@@ -218,6 +254,7 @@ forceRemove(gid: string): Promise<string>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID to force remove
 
 **Returns:** Promise resolving to the GID of removed download
@@ -235,19 +272,24 @@ tellStatus(gid: string, keys?: string[]): Promise<DownloadStatus>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID
 - `keys` (optional): Array of keys to retrieve (filters response)
 
 **Returns:** Promise resolving to download status
 
 **Example:**
+
 ```typescript
 // Get full status
 const status = await aria2.tellStatus(gid);
 
 // Get specific fields only
 const status = await aria2.tellStatus(gid, [
-  "status", "completedLength", "totalLength", "downloadSpeed"
+  "status",
+  "completedLength",
+  "totalLength",
+  "downloadSpeed",
 ]);
 ```
 
@@ -260,6 +302,7 @@ tellActive(keys?: string[]): Promise<DownloadStatus[]>
 ```
 
 **Parameters:**
+
 - `keys` (optional): Array of keys to retrieve (filters response)
 
 **Returns:** Promise resolving to array of active download statuses
@@ -273,6 +316,7 @@ tellWaiting(offset: number, num: number, keys?: string[]): Promise<DownloadStatu
 ```
 
 **Parameters:**
+
 - `offset`: Offset from the beginning of the waiting queue
 - `num`: Number of downloads to retrieve (max 1000)
 - `keys` (optional): Array of keys to retrieve (filters response)
@@ -288,6 +332,7 @@ tellStopped(offset: number, num: number, keys?: string[]): Promise<DownloadStatu
 ```
 
 **Parameters:**
+
 - `offset`: Offset from the beginning of the stopped queue
 - `num`: Number of downloads to retrieve (max 1000)
 - `keys` (optional): Array of keys to retrieve (filters response)
@@ -317,16 +362,18 @@ changeGlobalOption(options: Partial<GlobalOptions>): Promise<string>
 ```
 
 **Parameters:**
+
 - `options`: Global options to change
 
 **Returns:** Promise resolving to "OK" on success
 
 **Example:**
+
 ```typescript
 await aria2.changeGlobalOption({
   "max-concurrent-downloads": 5,
   "max-connection-per-server": 8,
-  "split": 16
+  split: 16,
 });
 ```
 
@@ -403,6 +450,7 @@ removeDownloadResult(gid: string): Promise<string>
 ```
 
 **Parameters:**
+
 - `gid`: Download GID to remove from memory
 
 **Returns:** Promise resolving to "OK" on success
@@ -416,7 +464,7 @@ Complete download status information from aria2.
 ```typescript
 interface DownloadStatus {
   gid: string;
-  status: 'active' | 'waiting' | 'paused' | 'error' | 'complete' | 'removed';
+  status: "active" | "waiting" | "paused" | "error" | "complete" | "removed";
   totalLength: string;
   completedLength: string;
   uploadLength: string;
@@ -461,16 +509,16 @@ interface DownloadOptions {
 
 **Common Options:**
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `dir` | `string` | Directory to store downloaded files |
-| `out` | `string` | Output filename |
-| `split` | `number` | Number of connections to use per server |
-| `"max-connection-per-server"` | `number` | Maximum connections per server |
-| `"min-split-size"` | `string` | Minimum split size (e.g., "1M") |
-| `continue` | `boolean` | Continue partial download |
-| `"check-integrity"` | `boolean` | Check file integrity |
-| `"max-download-limit"` | `string` | Maximum download speed (e.g., "1M") |
+| Option                        | Type      | Description                             |
+| ----------------------------- | --------- | --------------------------------------- |
+| `dir`                         | `string`  | Directory to store downloaded files     |
+| `out`                         | `string`  | Output filename                         |
+| `split`                       | `number`  | Number of connections to use per server |
+| `"max-connection-per-server"` | `number`  | Maximum connections per server          |
+| `"min-split-size"`            | `string`  | Minimum split size (e.g., "1M")         |
+| `continue`                    | `boolean` | Continue partial download               |
+| `"check-integrity"`           | `boolean` | Check file integrity                    |
+| `"max-download-limit"`        | `string`  | Maximum download speed (e.g., "1M")     |
 
 ### GlobalOptions
 
@@ -591,6 +639,7 @@ class NetworkError extends Aria2Error {
 ```
 
 **Common scenarios:**
+
 - Connection timeout
 - Connection refused
 - DNS resolution failure
@@ -607,6 +656,7 @@ class AuthenticationError extends Aria2Error {
 ```
 
 **Common scenarios:**
+
 - Invalid secret token
 - Missing authentication
 - HTTP 401/403 responses
@@ -624,6 +674,7 @@ class JsonRpcError extends Aria2Error {
 ```
 
 **Common RPC error codes:**
+
 - `1`: Authentication failed
 - `2`: Invalid method
 - `3`: Invalid parameters
@@ -643,6 +694,7 @@ class ValidationError extends Aria2Error {
 ```
 
 **Common scenarios:**
+
 - Invalid URIs
 - Invalid GID format
 - Invalid parameter types
@@ -659,6 +711,7 @@ class ConfigurationError extends Aria2Error {
 ```
 
 **Common scenarios:**
+
 - Invalid baseUrl
 - Invalid timeout value
 - Invalid headers
@@ -666,12 +719,12 @@ class ConfigurationError extends Aria2Error {
 ### Error Handling Examples
 
 ```typescript
-import { 
-  Aria2Error, 
-  NetworkError, 
-  AuthenticationError, 
-  JsonRpcError, 
-  ValidationError 
+import {
+  Aria2Error,
+  NetworkError,
+  AuthenticationError,
+  JsonRpcError,
+  ValidationError,
 } from "@hitarashi/aria2";
 
 try {
@@ -709,7 +762,7 @@ try {
 const aria2 = new Aria2({
   baseUrl: "http://localhost:6800/jsonrpc",
   secret: "your-secret-token",
-  timeout: 30000
+  timeout: 30000,
 });
 
 // Reuse the client for multiple downloads
@@ -748,24 +801,27 @@ async function monitorDownload(gid: string): Promise<void> {
   const interval = setInterval(async () => {
     try {
       const status = await aria2.tellStatus(gid, [
-        "status", "completedLength", "totalLength", "downloadSpeed"
+        "status",
+        "completedLength",
+        "totalLength",
+        "downloadSpeed",
       ]);
-      
+
       if (status.status === "complete") {
         console.log("✅ Download completed");
         clearInterval(interval);
         return;
       }
-      
+
       if (status.status === "error") {
         console.log("❌ Download failed");
         clearInterval(interval);
         return;
       }
-      
-      const progress = (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
+
+      const progress =
+        (parseInt(status.completedLength) / parseInt(status.totalLength)) * 100;
       console.log(`📥 ${progress.toFixed(1)}% (${status.downloadSpeed} B/s)`);
-      
     } catch (error) {
       console.error("Error monitoring download:", error);
       clearInterval(interval);
@@ -780,12 +836,12 @@ async function monitorDownload(gid: string): Promise<void> {
 // Process multiple downloads efficiently
 async function addMultipleDownloads(urls: string[]): Promise<string[]> {
   const results = await Promise.allSettled(
-    urls.map(url => aria2.addUri([url]))
+    urls.map((url) => aria2.addUri([url])),
   );
-  
+
   const successful: string[] = [];
   const failed: string[] = [];
-  
+
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
       successful.push(result.value);
@@ -794,7 +850,7 @@ async function addMultipleDownloads(urls: string[]): Promise<string[]> {
       console.error(`Failed to add ${urls[index]}:`, result.reason);
     }
   });
-  
+
   console.log(`Added ${successful.length} downloads, ${failed.length} failed`);
   return successful;
 }
@@ -808,13 +864,11 @@ async function cleanupCompletedDownloads(): Promise<void> {
   try {
     // Get stopped downloads
     const stopped = await aria2.tellStopped(0, 100, ["gid", "status"]);
-    
+
     // Remove completed downloads from memory
-    const completed = stopped.filter(d => d.status === "complete");
-    await Promise.all(
-      completed.map(d => aria2.removeDownloadResult(d.gid))
-    );
-    
+    const completed = stopped.filter((d) => d.status === "complete");
+    await Promise.all(completed.map((d) => aria2.removeDownloadResult(d.gid)));
+
     console.log(`Cleaned up ${completed.length} completed downloads`);
   } catch (error) {
     console.error("Error during cleanup:", error);
@@ -831,8 +885,8 @@ const aria2 = new Aria2({
   secret: Deno.env.get("ARIA2_SECRET"),
   timeout: parseInt(Deno.env.get("ARIA2_TIMEOUT") || "30000"),
   headers: {
-    "User-Agent": `MyApp/${Deno.env.get("APP_VERSION") || "1.0"}`
-  }
+    "User-Agent": `MyApp/${Deno.env.get("APP_VERSION") || "1.0"}`,
+  },
 });
 
 // Validate configuration at startup
